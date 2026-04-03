@@ -1,0 +1,23 @@
+{
+  "camera_index": 0,
+  "model_path": "models/dev-baseline.json",
+  "confidence_threshold": 0.7,
+  "hold_frames": 3,
+  "tts_provider": "mock",
+  "transcript_path": "outputs/demo-transcript.jsonl",
+  "metrics_path": "outputs/eval-metrics.json",
+  "dataset_path": "data/processed/sample_landmarks.jsonl",
+  "max_frames": 18,
+  "frame_interval_seconds": 0.0,
+  "use_camera": true,
+  "demo_sequence": [
+    "HELLO",
+    "YES",
+    "NO",
+    "THANK_YOU",
+    "HELP",
+    "STOP"
+  ],
+  "elevenlabs_api_key": null,
+  "elevenlabs_voice_id": null
+}

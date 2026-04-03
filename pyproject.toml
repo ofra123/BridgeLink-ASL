@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bridgelink-asl"
+version = "0.1.0"
+description = "Python-first proof of concept for real-time ASL gesture recognition, text output, and speech."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "BridgeLink ASL Team" }
+]
+dependencies = []
+
+[project.optional-dependencies]
+demo = [
+  "opencv-python>=4.9",
+  "mediapipe>=0.10.21"
+]
+speech = [
+  "pyttsx3>=2.90"
+]
+training = [
+  "tensorflow>=2.16",
+  "numpy>=1.26"
+]
+cloud = [
+  "elevenlabs>=1.7.0"
+]
+dev = [
+  "pytest>=8.3"
+]
+
+[project.scripts]
+run_demo = "bridgelink_asl.cli.run_demo:main"
+train_model = "bridgelink_asl.cli.train_model:main"
+evaluate_model = "bridgelink_asl.cli.evaluate_model:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bridgelink_asl"]
