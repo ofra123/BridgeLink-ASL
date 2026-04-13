@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Iterator
 
 from .config import AppConfig
-from .types import Frame
+from .asl_types import Frame
 
 try:
     import cv2  # type: ignore

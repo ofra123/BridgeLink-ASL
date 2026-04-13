@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .types import LandmarkSample, Prediction
+from .asl_types import LandmarkSample, Prediction
 from .vocabulary import LANDMARK_FEATURE_LENGTH, get_seed_landmarks, get_v1_labels
 
 

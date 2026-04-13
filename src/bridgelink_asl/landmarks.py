@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .config import AppConfig
-from .types import Frame, LandmarkSample
+from .asl_types import Frame, LandmarkSample
 from .vocabulary import DEFAULT_DEMO_SEQUENCE, get_seed_landmarks
 
 

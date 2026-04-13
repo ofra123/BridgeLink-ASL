@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .types import Prediction, TranslationEvent
+from .asl_types import Prediction, TranslationEvent
 from .vocabulary import SIGN_BY_LABEL
 
 

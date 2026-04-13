@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .classifier import build_classifier
 from .dataset import load_dataset
-from .types import LandmarkSample
+from .asl_types import LandmarkSample
 
 
 @dataclass(frozen=True)

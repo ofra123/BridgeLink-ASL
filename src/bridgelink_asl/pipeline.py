@@ -13,7 +13,7 @@ from .landmarks import build_landmark_extractor
 from .smoothing import PredictionSmoother
 from .speech import SpeechAdapterSelection, select_speech_adapter
 from .translation import SignTranslator
-from .types import RunSummary, TranslationEvent
+from .asl_types import RunSummary, TranslationEvent
 
 
 class JsonlTranscriptWriter:

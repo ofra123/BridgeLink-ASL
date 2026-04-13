@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .types import Prediction
+from .asl_types import Prediction
 
 
 class PredictionSmoother:
