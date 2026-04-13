@@ -12,3 +12,8 @@ outputs/
 *.egg-info/
 .DS_Store
 Thumbs.db
+.venv
+__pycache__
+*.pyc
+models/
+data/processed/*.jsonl
