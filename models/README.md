@@ -1,15 +1,26 @@
-# Model Artifacts
+# Model Weights
 
-This folder stores saved baseline models and later exported production-ready artifacts.
+Place the trained model files here after running the Colab training notebook.
 
-Current starter format:
+## Required files
 
-- `model_type`: `centroid-baseline`
-- `feature_length`: number of landmark features per sample
-- `labels`: label-to-centroid mapping with sample counts
+| File | Source | Description |
+|---|---|---|
+| `sign_transformer_best.pt` | Google Drive → BridgeLink-ASL → models/ | Trained Transformer weights + label map + config (~5 MB) |
+| `labels.json` | Google Drive → BridgeLink-ASL → models/ | Label index → gloss name mapping |
 
-Suggested lifecycle:
+## How to get them
 
-1. save early centroid baselines here during phase 2
-2. compare them against later TensorFlow or TensorFlow Lite exports
-3. keep only small reproducible artifacts in Git
+1. Open Google Drive → `BridgeLink-ASL/models/`
+2. Download `sign_transformer_best.pt` and `labels.json`
+3. Place both files in this `models/` directory
+
+The app loads `sign_transformer_best.pt` at startup. If the file is missing,
+the app will start but show a "Model: NOT LOADED" banner and predictions
+won't work.
+
+## Alternative: Hugging Face Hub
+
+Instead of committing the `.pt` file to git, you can upload it to a HF model
+repo and set `HF_MODEL_REPO=your-username/repo-name` as an environment
+variable. The app will auto-download from the Hub at startup.

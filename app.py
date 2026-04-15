@@ -1,232 +1,329 @@
-"""Gradio Space entrypoint for BridgeLink ASL."""
+"""BridgeLink ASL — Hugging Face Space entrypoint.
+
+Loads a trained SignTransformer and runs two demo modes:
+- Live webcam streaming (frame-by-frame sliding window prediction).
+- Uploaded / recorded clip classification.
+
+Set the HF_MODEL_REPO env var (e.g. "your-username/bridgelink-asl-wlasl100")
+to auto-download weights from the Hugging Face Hub on Space startup. If unset,
+the app looks for models/sign_transformer_best.pt in the repo root.
+"""
 
 from __future__ import annotations
 
+import json
+import os
 import sys
+import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
 import gradio as gr
+import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from bridgelink_asl.clip_dataset import load_clip_dataset  # noqa: E402
-from bridgelink_asl.cnn import CnnModelConfig, build_cnn_training_plan, describe_cnn_baseline  # noqa: E402
-from bridgelink_asl.config import load_config  # noqa: E402
-from bridgelink_asl.project_assets import (  # noqa: E402
-    build_comparison_results,
-    build_dataset_summary,
-    make_bar_chart_svg,
-    report_summary_markdown,
+from bridgelink_asl.inference import (  # noqa: E402
+    SignLanguageRuntime,
+    load_runtime,
+    extract_landmarks_from_frame,
+    extract_landmarks_from_video,
 )
-from bridgelink_asl.space_inference import result_to_markdown, run_space_poc  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Runtime setup
+# ---------------------------------------------------------------------------
+
+MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
+LOCAL_WEIGHTS = PROJECT_ROOT / "models" / "sign_transformer_best.pt"
+SEQ_LEN = 32
+STRIDE = 4                     # run inference every STRIDE frames
+MIN_CONFIDENCE = 0.35          # below this, show nothing
+STABILITY_K = 2                # require K consecutive same predictions before emitting
+
+RUNTIME: SignLanguageRuntime | None = None
+RUNTIME_ERROR: str | None = None
+
+try:
+    RUNTIME = load_runtime(local_path=LOCAL_WEIGHTS, hf_repo=MODEL_REPO or None)
+    print(f"[bridgelink] loaded model with {len(RUNTIME.labels)} classes")
+except Exception as exc:  # keep the Space bootable even if weights are missing
+    RUNTIME_ERROR = f"{type(exc).__name__}: {exc}"
+    print(f"[bridgelink] WARNING: model not loaded — {RUNTIME_ERROR}")
 
 
-def predict_asl_clip(video: Any, mode: str) -> tuple[str, dict[str, Any]]:
-    """Run the hosted proof-of-concept path."""
+def _require_runtime() -> SignLanguageRuntime:
+    if RUNTIME is None:
+        raise gr.Error(
+            "Model weights are not available on this Space. "
+            "Set the HF_MODEL_REPO env var or upload "
+            "models/sign_transformer_best.pt to the repo."
+        )
+    return RUNTIME
 
-    config = load_config()
-    result = run_space_poc(video, mode, vlm_model_id=config.vlm_model_id)
-    return result_to_markdown(result), result
 
+# ---------------------------------------------------------------------------
+# Live webcam streaming handler
+# ---------------------------------------------------------------------------
 
-def cnn_plan() -> dict[str, Any]:
-    """Show the CNN baseline plan in the hosted UI."""
-
-    config = load_config()
-    records = load_clip_dataset(config.clip_manifest_path)
-    cnn_config = CnnModelConfig(
-        frame_count=config.cnn_frame_count,
-        image_size=config.cnn_image_size,
-        batch_size=config.cnn_batch_size,
-        epochs=config.cnn_epochs,
-        model_path=config.cnn_model_path,
-        manifest_path=config.clip_manifest_path,
-    )
-    plan = build_cnn_training_plan(records, cnn_config)
+def init_live_state() -> dict[str, Any]:
     return {
-        "cnn": describe_cnn_baseline(cnn_config, num_classes=len(plan.labels)),
-        "plan": plan.as_dict(),
+        "buffer": deque(maxlen=SEQ_LEN),
+        "frame_idx": 0,
+        "last_label": None,
+        "stable_count": 0,
+        "caption": "",
+        "history": [],
+        "last_inference_ms": 0.0,
     }
 
 
-def dataset_dashboard() -> tuple[str, str, dict[str, Any]]:
-    """Return dataset text, charts, and JSON summary for the Space."""
+def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
+    """Streaming handler — called on every webcam frame from Gradio."""
+    if state is None:
+        state = init_live_state()
+    if frame is None:
+        return frame, state["caption"], state
 
-    records = _dashboard_records()
-    summary = build_dataset_summary(records)
-    markdown = f"""## How2Sign Subset Dataset
+    runtime = _require_runtime()
 
-Total clips: **{summary['total_clips']}**
+    # Extract landmarks for this frame and append to the rolling buffer.
+    lm = extract_landmarks_from_frame(frame)
+    state["buffer"].append(lm)
+    state["frame_idx"] += 1
 
-Sentence classes: **{summary['num_classes']}**
+    # Only run the model every STRIDE frames, and only once the buffer is full.
+    if (
+        len(state["buffer"]) == SEQ_LEN
+        and state["frame_idx"] % STRIDE == 0
+    ):
+        t0 = time.perf_counter()
+        sequence = np.stack(list(state["buffer"]))   # (32, 225)
+        label, confidence, top5 = runtime.predict(sequence)
+        state["last_inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
 
-The final workflow uses a small How2Sign subset manifest. Raw How2Sign videos
-stay outside Git; only metadata, sampled frame paths, and derived metrics belong
-in the repo/Space.
-"""
-    charts = "\n".join(
-        [
-            make_bar_chart_svg("Class distribution", summary["class_counts"]),
-            make_bar_chart_svg("Train/validation/test split", summary["split_counts"]),
-        ]
+        if confidence >= MIN_CONFIDENCE:
+            if label == state["last_label"]:
+                state["stable_count"] += 1
+            else:
+                state["last_label"] = label
+                state["stable_count"] = 1
+
+            # Emit the sign only once it has been stable for K consecutive runs
+            # AND is different from the most recently emitted caption token.
+            if state["stable_count"] >= STABILITY_K:
+                last_emitted = state["history"][-1] if state["history"] else None
+                if label != last_emitted:
+                    state["history"].append(label)
+                    state["history"] = state["history"][-12:]  # keep last 12
+                    state["caption"] = _format_caption(state["history"])
+
+    return frame, _status_markdown(state), state
+
+
+def _format_caption(history: list[str]) -> str:
+    if not history:
+        return "_Start signing..._"
+    words = [w.replace("_", " ").title() for w in history]
+    return "**" + " · ".join(words) + "**"
+
+
+def _status_markdown(state: dict[str, Any]) -> str:
+    caption = state.get("caption") or "_Start signing..._"
+    last_label = state.get("last_label") or "—"
+    infer = state.get("last_inference_ms", 0.0)
+    buf = len(state["buffer"]) if state.get("buffer") is not None else 0
+    return (
+        f"### Caption\n\n{caption}\n\n"
+        f"- Current candidate: **{last_label}**\n"
+        f"- Buffer: {buf}/{SEQ_LEN} frames\n"
+        f"- Last inference: {infer} ms"
     )
-    return markdown, charts, summary
 
 
-def experiments_dashboard() -> tuple[str, str, dict[str, Any]]:
-    """Return experiment text, SVG charts, and comparison JSON."""
-
-    comparison = build_comparison_results(_dashboard_records())
-    cnn = comparison["cnn_metrics"]
-    vlm = comparison["vlm_metrics"]
-    markdown = f"""## CNN vs VLM Experiment Scaffold
-
-CNN accuracy: **{cnn['accuracy']}**
-
-VLM score: **{vlm['accuracy']}**
-
-These metrics are scaffolded until real CNN and Qwen outputs are generated.
-The files/scripts are ready for real experiments: train CNN, run Qwen2.5-VL,
-then regenerate the same artifacts for the report and presentation.
-"""
-    charts = "\n".join(
-        [
-            comparison["comparison_chart_svg"],
-            comparison["confusion_matrix_svg"],
-        ]
-    )
-    compact = {
-        "status": comparison["status"],
-        "cnn_metrics": comparison["cnn_metrics"],
-        "vlm_metrics": comparison["vlm_metrics"],
-        "rows": comparison["rows"],
-    }
-    return markdown, charts, compact
+def reset_live() -> tuple[dict[str, Any], str]:
+    state = init_live_state()
+    return state, _status_markdown(state)
 
 
-def report_dashboard() -> str:
-    """Return the CVPR-style report checklist."""
+# ---------------------------------------------------------------------------
+# Uploaded / recorded clip handler
+# ---------------------------------------------------------------------------
 
-    return report_summary_markdown()
+def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
+    if not video_path:
+        return "Please upload or record a clip first.", {}
+    runtime = _require_runtime()
 
+    t0 = time.perf_counter()
+    sequence = extract_landmarks_from_video(video_path, seq_len=SEQ_LEN)
+    extract_ms = round((time.perf_counter() - t0) * 1000, 1)
 
-def _dashboard_records():
-    config = load_config()
-    candidates = [
-        Path("data/processed/how2sign_subset.jsonl"),
-        Path("data/processed/how2sign_subset.example.jsonl"),
-        config.clip_manifest_path,
+    if sequence is None:
+        return "Could not read the video file.", {}
+
+    t0 = time.perf_counter()
+    label, confidence, top5 = runtime.predict(sequence)
+    infer_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    lines = [
+        f"## Prediction: **{label.replace('_', ' ').title()}**",
+        f"Confidence: **{confidence:.1%}**",
+        "",
+        "### Top 5",
     ]
-    for path in candidates:
-        if path.exists():
-            return load_clip_dataset(path)
-    return load_clip_dataset(config.clip_manifest_path)
+    for i, (name, score) in enumerate(top5, start=1):
+        lines.append(f"{i}. {name.replace('_', ' ').title()} — {score:.1%}")
+    lines += ["", f"Landmark extraction: {extract_ms} ms · Inference: {infer_ms} ms"]
+
+    details = {
+        "label": label,
+        "confidence": confidence,
+        "top5": [{"label": n, "score": s} for n, s in top5],
+        "extract_ms": extract_ms,
+        "inference_ms": infer_ms,
+        "sequence_shape": list(sequence.shape),
+    }
+    return "\n".join(lines), details
+
+
+# ---------------------------------------------------------------------------
+# Dataset / results tabs (read static artifacts exported by the notebook)
+# ---------------------------------------------------------------------------
+
+def load_metrics() -> dict[str, Any]:
+    candidates = [
+        PROJECT_ROOT / "results" / "metrics.json",
+        PROJECT_ROOT / "models" / "metrics.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            return json.loads(p.read_text())
+    return {"status": "metrics.json not found — run the training notebook and upload it."}
+
+
+def results_markdown() -> str:
+    m = load_metrics()
+    if "status" in m:
+        return m["status"]
+    return (
+        "## WLASL-100 results\n\n"
+        f"- Test top-1: **{m.get('test_top1', 0):.1%}**\n"
+        f"- Test top-5: **{m.get('test_top5', 0):.1%}**\n"
+        f"- Best val top-1: {m.get('val_top1_best', 0):.1%} "
+        f"(epoch {m.get('val_top1_best_epoch', '?')})\n"
+        f"- Classes: {m.get('num_classes', '?')}\n"
+        f"- Train / val / test: "
+        f"{m.get('train_samples', '?')} / {m.get('val_samples', '?')} / {m.get('test_samples', '?')}\n"
+        f"- Model params: {m.get('model_params_M', 0):.2f}M\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# UI
+# ---------------------------------------------------------------------------
+
+STATUS_BANNER = (
+    f"Model: **loaded — {len(RUNTIME.labels)} classes**"
+    if RUNTIME is not None
+    else f"Model: **NOT LOADED** ({RUNTIME_ERROR})"
+)
 
 
 with gr.Blocks(title="BridgeLink ASL") as demo:
     gr.Markdown(
-        """
+        f"""
         # BridgeLink ASL
 
-        CNN vs VLM ASL sentence recognition demo. Record a short webcam clip
-        or upload a clip, then run CNN, VLM, or Compare mode.
+        Real-time American Sign Language word recognition using MediaPipe
+        landmarks and a lightweight Transformer classifier trained on WLASL-100.
 
-        The hosted Space runs an end-to-end proof of concept today. It analyzes
-        the clip, produces CNN-style and VLM-style outputs, and keeps the same
-        contracts that the trained CNN and Qwen runtime will use later.
+        {STATUS_BANNER}
         """
     )
-    with gr.Tab("Run Demo"):
+
+    with gr.Tab("Live Webcam"):
         gr.Markdown(
-            """
-            Use the webcam option to record a 2-5 second signing clip. This is
-            the recommended hosted-demo flow for Hugging Face Spaces.
-            """
+            "Stream your webcam. The model runs on a rolling 32-frame window "
+            "and emits a sign when it is confident and stable. "
+            "For best results: good lighting, plain background, upper body in frame."
         )
-        video_input = gr.Video(
-            label="Upload or record a short ASL clip",
+        live_state = gr.State(init_live_state())
+        with gr.Row():
+            with gr.Column(scale=2):
+                webcam = gr.Image(
+                    sources=["webcam"],
+                    streaming=True,
+                    type="numpy",
+                    label="Webcam",
+                )
+            with gr.Column(scale=1):
+                live_status = gr.Markdown(_status_markdown(init_live_state()))
+                reset_btn = gr.Button("Reset caption")
+        webcam.stream(
+            on_live_frame,
+            inputs=[webcam, live_state],
+            outputs=[webcam, live_status, live_state],
+            show_progress="hidden",
+        )
+        reset_btn.click(reset_live, outputs=[live_state, live_status])
+
+    with gr.Tab("Upload / Record Clip"):
+        gr.Markdown(
+            "Upload an mp4 or record a short (2–5 s) clip. Use this tab as a "
+            "reliable backup if the live stream is laggy."
+        )
+        clip_input = gr.Video(
             sources=["upload", "webcam"],
             format="mp4",
             include_audio=False,
+            label="ASL clip",
         )
-        mode_input = gr.Dropdown(["Compare", "CNN", "VLM"], value="Compare", label="Mode")
-        run_button = gr.Button("Run BridgeLink ASL")
-        summary_output = gr.Markdown(label="Summary")
-        output = gr.JSON(label="Detailed Result")
-        run_button.click(predict_asl_clip, inputs=[video_input, mode_input], outputs=[summary_output, output])
+        clip_button = gr.Button("Classify clip", variant="primary")
+        clip_summary = gr.Markdown()
+        clip_details = gr.JSON(label="Details")
+        clip_button.click(
+            classify_clip,
+            inputs=[clip_input],
+            outputs=[clip_summary, clip_details],
+        )
 
-    with gr.Tab("Webcam Only"):
+    with gr.Tab("Results"):
+        results_md = gr.Markdown(results_markdown())
+        gr.Markdown(
+            "Confusion matrix, training curves, and classification report are "
+            "exported by the training notebook into the `results/` folder and "
+            "embedded in the CVPR-style report."
+        )
+
+    with gr.Tab("About"):
         gr.Markdown(
             """
-            This tab forces webcam recording only. Record a short sentence clip,
-            stop recording, then run the same comparison pipeline.
+            ## Method
+
+            1. **Landmark extraction** — MediaPipe Holistic (21 left-hand + 21 right-hand + 33 pose landmarks × 3 coords = 225 dims per frame)
+            2. **Sequence model** — 4-layer Transformer encoder, 192-dim, 4 heads, CLS-token classification
+            3. **Training** — WLASL-100, 60 epochs, AdamW + cosine schedule, label smoothing, temporal + spatial augmentation
+            4. **Inference** — rolling 32-frame buffer, stride 4, confidence threshold 0.35, stability filter of 2 consecutive frames before emission
+
+            ## Dataset
+
+            [WLASL-100](https://dxli94.github.io/WLASL/) — the 100 most frequent glosses
+            from the Word-Level ASL video dataset. Distributed under the Computational
+            Use of Data Agreement (C-UDA).
+
+            ## Limitations
+
+            - Trained on WLASL-100 only — vocabulary is limited to 100 glosses.
+            - Single-signer generalization depends on the diversity of the training split.
+            - Continuous sentence translation is out of scope; the model classifies
+              isolated signs from short windows.
             """
         )
-        webcam_input = gr.Video(
-            label="Record webcam signing clip",
-            sources=["webcam"],
-            format="mp4",
-            include_audio=False,
-        )
-        webcam_mode = gr.Dropdown(["Compare", "CNN", "VLM"], value="Compare", label="Mode")
-        webcam_button = gr.Button("Run Captured Webcam Clip")
-        webcam_summary = gr.Markdown(label="Summary")
-        webcam_output = gr.JSON(label="Detailed Result")
-        webcam_button.click(
-            predict_asl_clip,
-            inputs=[webcam_input, webcam_mode],
-            outputs=[webcam_summary, webcam_output],
-        )
-
-    with gr.Tab("Project Status"):
-        gr.Markdown(
-            """
-            ## What runs on this Space now
-
-            - Upload or record a short ASL clip.
-            - Extract lightweight video features with OpenCV when available.
-            - Produce a CNN-style sentence/gloss prediction.
-            - Produce a VLM-style English sentence grounded by the CNN/token output.
-            - Show agreement, confidence, latency, and limitations.
-
-            ## What still requires project data/hardware
-
-            - The trained CNN artifact needs real sampled frames from the How2Sign subset.
-            - Real Qwen2.5-VL-32B-AWQ inference needs GPU hardware and model setup.
-            - The final benchmark wrapper will replace the current PoC scoring with true test-set metrics.
-            """
-        )
-
-    with gr.Tab("Dataset"):
-        dataset_button = gr.Button("Load How2Sign Dataset Summary")
-        dataset_markdown = gr.Markdown(label="Dataset Summary")
-        dataset_charts = gr.HTML(label="Dataset Charts")
-        dataset_json = gr.JSON(label="Dataset JSON")
-        dataset_button.click(dataset_dashboard, outputs=[dataset_markdown, dataset_charts, dataset_json])
-
-    with gr.Tab("Experiments"):
-        experiments_button = gr.Button("Load CNN vs VLM Results")
-        experiments_markdown = gr.Markdown(label="Experiment Summary")
-        experiments_charts = gr.HTML(label="Experiment Charts")
-        experiments_json = gr.JSON(label="Experiment JSON")
-        experiments_button.click(
-            experiments_dashboard,
-            outputs=[experiments_markdown, experiments_charts, experiments_json],
-        )
-
-    with gr.Tab("Report"):
-        report_button = gr.Button("Show CVPR Report Checklist")
-        report_output = gr.Markdown(label="Report Checklist")
-        report_button.click(report_dashboard, outputs=report_output)
-
-    with gr.Tab("CNN Plan"):
-        plan_button = gr.Button("Show CNN Training Plan")
-        plan_output = gr.JSON(label="CNN Plan")
-        plan_button.click(cnn_plan, outputs=plan_output)
 
 
 if __name__ == "__main__":

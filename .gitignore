@@ -1,23 +1,44 @@
-.venv*/
+# Python
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-build/
-dist/
-outputs/
-.tmp-tests/
 *.egg-info/
+*.egg
+dist/
+build/
+.venv/
+.venv*/
+venv/
+.env
+.tmp-tests/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
 .DS_Store
 Thumbs.db
-models/*
-!models/README.md
-data/processed/*.jsonl
-!data/processed/sample_landmarks.jsonl
-!data/processed/sample_sentence_clips.jsonl
-!data/processed/how2sign_subset.jsonl
-!data/processed/how2sign_subset.example.jsonl
-data/interim/frames/
-data/raw/how2sign/
+
+# Data — do NOT commit video files or large datasets
+data/raw/
+data/processed/
+*.mp4
+*.avi
+*.mov
+landmarks/
+*.npy
+
+# Model weights — commit the .pt only if < 10 MB, otherwise use HF Hub
+# Uncomment the next line if you DON'T want weights in git:
+# models/*.pt
+
+# Colab / Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Logs
+*.log
+wandb/
+outputs/

@@ -1,11 +1,17 @@
-# Results Artifacts
+# Results
 
-This directory stores small report-ready artifacts generated from the How2Sign subset manifest.
+Place the training outputs here after running the Colab notebook.
 
-Generated command:
+## Files to download from Google Drive → BridgeLink-ASL → results/
 
-```powershell
-python scripts/generate_project_results.py --manifest data/processed/how2sign_subset.example.jsonl --output-dir results
-```
+| File | Used by |
+|---|---|
+| `metrics.json` | The app's Results tab, and for filling in the report TODOs |
+| `class_distribution.png` | Report Figure 1 |
+| `split_distribution.png` | Report Figure 2 |
+| `training_curves.png` | Report Figure 3 |
+| `confusion_matrix.png` | Report Figure 4 |
+| `sample_frames.png` | Report / presentation dataset slide |
+| `classification_report.txt` | Report per-class precision/recall table |
 
-When real How2Sign clips, CNN predictions, and Qwen outputs are available, regenerate these files from `data/processed/how2sign_subset.jsonl`.
+Copy these into `report/figures/` as well for the LaTeX build.

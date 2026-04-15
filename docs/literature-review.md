@@ -1,33 +1,49 @@
-# Literature Review Plan
+# Literature Review
 
-The final report should cover at least five papers or technical reports. Use this as the starter set and verify final citations before submission.
+Five academic papers reviewed for the project (one per team member + one extra).
 
-## Candidate Sources
+## 1. Li et al., "Word-level Deep Sign Language Recognition from Video" (WACV 2020)
 
-1. Duarte et al., "How2Sign: A Large-Scale Multimodal Dataset for Continuous American Sign Language", CVPR 2021.
+**Why relevant:** Introduces the WLASL dataset — the benchmark we train on. Provides I3D and Pose-TGCN baselines for WLASL-100/300/1000/2000 subsets with standardized signer-independent splits.
 
-Why it matters: this is the primary dataset source for the project and motivates continuous ASL video understanding.
+**Key results:** I3D achieves 65.89% top-1 on WLASL-100 using full RGB video. Pose-TGCN (skeleton-based) achieves 55.43% — lower but much more efficient, which motivates our landmark approach.
 
-2. Li et al., "Word-level Deep Sign Language Recognition from Video: A New Large-scale Dataset and Methods Comparison", WACV 2020.
+**What we borrow:** The WLASL-100 subset definition, the official train/val/test splits, and the framing of word-level recognition as a video classification problem.
 
-Why it matters: this provides a word-level ASL recognition baseline and context for CNN/action-recognition approaches.
+## 2. Camgoz et al., "Sign Language Transformers" (CVPR 2020)
 
-3. Carreira and Zisserman, "Quo Vadis, Action Recognition? A New Model and the Kinetics Dataset", CVPR 2017.
+**Why relevant:** First work to apply Transformers jointly to sign language recognition and translation. Shows that attention-based temporal modeling outperforms RNN-based approaches on continuous sign benchmarks.
 
-Why it matters: this is a key reference for video action recognition and temporal visual modeling.
+**Key results:** Achieves SOTA on the PHOENIX-2014T continuous sign dataset using a Transformer encoder-decoder architecture.
 
-4. Yan, Xiong, and Lin, "Spatial Temporal Graph Convolutional Networks for Skeleton-Based Action Recognition", AAAI 2018.
+**What we borrow:** The core idea of treating per-frame features as a sequence and classifying from a Transformer encoder. Our architecture uses the same CLS-token approach but at word level rather than sentence level.
 
-Why it matters: this supports discussion of landmark/skeleton-based alternatives to raw-frame CNNs.
+## 3. Grishchenko et al., "MediaPipe Holistic" (Google AI Blog, 2020)
 
-5. Bai et al., "Qwen2.5-VL Technical Report", 2025.
+**Why relevant:** Describes the real-time pose, hand, and face estimation pipeline we use as our feature extractor. MediaPipe Holistic runs at 30+ FPS on CPU, which makes live webcam demos practical.
 
-Why it matters: this documents the vision-language model family used for the VLM comparison path.
+**Key results:** Simultaneous detection of 33 pose, 21 per-hand, and 468 face landmarks from a single RGB frame with sub-millisecond latency on mobile devices.
 
-## How To Use These In The Report
+**What we borrow:** The full Holistic pipeline as a frozen feature extractor. We use 33 pose + 21 left-hand + 21 right-hand landmarks × 3 coords = 225-dimensional feature vectors per frame.
 
-- Dataset section: cite How2Sign.
-- Baseline section: cite CNN/action-recognition work.
-- Alternative methods section: cite landmark/skeleton action recognition.
-- Modern model section: cite Qwen2.5-VL and discuss transformers/attention.
-- Limitations section: explain that ASL translation remains difficult because meaning depends on temporal context, signer variation, facial expression, and grammar.
+## 4. Bohacek & Hruz, "Sign Pose-based Transformer for Word-level SLR" (WACV Workshops 2022)
+
+**Why relevant:** Directly addresses word-level sign recognition using pose landmarks + a Transformer encoder — the closest prior work to our approach. Demonstrates that skeleton-only models with attention can match or exceed pixel-based methods.
+
+**Key results:** Achieves competitive results on WLASL-100 using only upper-body pose keypoints, with significant efficiency gains over I3D.
+
+**What we borrow:** Validation that the landmark + Transformer approach is sound for WLASL-100, and their augmentation strategies (coordinate jitter, temporal perturbation).
+
+## 5. Jiang et al., "Skeleton Aware Multi-modal Sign Language Recognition" (CVPR Workshops 2021)
+
+**Why relevant:** Proposes SL-GCN, a graph convolutional approach to skeleton-based sign recognition. Provides an alternative architectural perspective to our Transformer approach and establishes strong baselines on WLASL.
+
+**Key results:** Multi-stream GCN on joint, bone, and motion features achieves strong performance on WLASL subsets.
+
+**What we borrow:** The insight that separating hand and body landmark streams improves recognition. Our feature vector explicitly groups left-hand, right-hand, and pose blocks, and our horizontal-flip augmentation swaps the hand blocks accordingly.
+
+## 6. Duarte et al., "How2Sign" (CVPR 2021)
+
+**Why relevant:** A large-scale continuous ASL translation corpus that we initially considered as our primary dataset. We ultimately chose WLASL-100 (isolated word-level) instead because continuous translation is a harder problem requiring sequence-to-sequence modeling beyond our project scope.
+
+**What we learned:** Continuous ASL translation remains an open research problem. Our word-level system is a practical building block toward that goal.

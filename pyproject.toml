@@ -4,40 +4,33 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bridgelink-asl"
-version = "0.1.0"
-description = "Python-first proof of concept for real-time ASL gesture recognition, text output, and speech."
+version = "0.2.0"
+description = "Real-time ASL word recognition with MediaPipe landmarks and a Transformer classifier."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-  { name = "BridgeLink ASL Team" }
+  { name = "Dalen Gordon", email = "dgordo34@charlotte.edu" },
+  { name = "Ervin Gordon III", email = "egordo17@charlotte.edu" },
+  { name = "Frank Garcia", email = "fgarci11@charlotte.edu" },
+  { name = "Omar Fraij", email = "ofraij@charlotte.edu" },
 ]
-dependencies = []
+dependencies = [
+  "gradio>=4.44",
+  "numpy>=1.26",
+  "opencv-python-headless>=4.9",
+  "mediapipe>=0.10.21",
+  "torch>=2.2",
+  "huggingface_hub>=0.24",
+]
 
 [project.optional-dependencies]
-demo = [
-  "opencv-python>=4.9",
-  "mediapipe>=0.10.21"
-]
-speech = [
-  "pyttsx3>=2.90"
-]
-training = [
-  "tensorflow>=2.16",
-  "numpy>=1.26"
-]
-cloud = [
-  "elevenlabs>=1.7.0"
-]
-dev = [
-  "pytest>=8.3"
-]
+speech = ["pyttsx3>=2.90"]
+cloud = ["elevenlabs>=1.7.0"]
+dev = ["pytest>=8.3"]
 
 [project.scripts]
-run_demo = "bridgelink_asl.cli.run_demo:main"
-train_model = "bridgelink_asl.cli.train_model:main"
-evaluate_model = "bridgelink_asl.cli.evaluate_model:main"
-train_cnn_model = "bridgelink_asl.cli.train_cnn_model:main"
+bridgelink-demo = "bridgelink_asl.cli.run_demo:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bridgelink_asl"]

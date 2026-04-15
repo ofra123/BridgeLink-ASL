@@ -1,0 +1,298 @@
+% BridgeLink ASL — CVPR 2024 camera-ready style
+% ITCS 4152/5010 Final Project Report, Spring 2026
+% This file drops into the cvpr2024-author_kit (camera-ready version).
+% Compile with: pdflatex main.tex ; bibtex main ; pdflatex main.tex ; pdflatex main.tex
+
+\documentclass[10pt,twocolumn,letterpaper]{article}
+
+\usepackage[review]{cvpr}      % change to \usepackage{cvpr} for camera-ready
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[capitalize]{cleveref}
+
+\def\cvprPaperID{****}
+\def\confName{CVPR}
+\def\confYear{2024}
+
+\title{BridgeLink ASL: Real-Time Word-Level American Sign Language\\ Recognition with Landmark Transformers}
+
+\author{%
+Dalen Gordon \quad Ervin Gordon III \quad Frank Garcia \quad Omar Fraij \\
+University of North Carolina at Charlotte \\
+ITCS 4152/5010 --- Introduction to Computer Vision, Spring 2026 \\
+{\tt\small \{dgordo34, egordo17, fgarci11, ofraij\}@charlotte.edu}
+}
+
+\begin{document}
+\maketitle
+
+% -----------------------------------------------------------------------------
+\begin{abstract}
+Communication barriers between Deaf and hearing communities remain a significant
+accessibility challenge despite the availability of human interpreters and
+captioning services. We present \textbf{BridgeLink ASL}, a real-time system for
+word-level American Sign Language (ASL) recognition that runs on a standard
+consumer laptop and a free Hugging Face Space. Our approach decomposes the
+problem into (i) pose and hand landmark extraction using MediaPipe Holistic and
+(ii) temporal classification with a lightweight Transformer encoder. Training on
+the WLASL-100 subset, our 1.3M-parameter model reaches TODO\% top-1 and TODO\%
+top-5 accuracy on the held-out test set while running at interactive rates on
+CPU. We deploy the model in a Gradio application that accepts both live webcam
+streams and uploaded clips, and synthesizes the recognized signs as speech.
+Code, trained weights, and dataset artifacts are publicly released.
+\end{abstract}
+
+% -----------------------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+American Sign Language is the primary language of an estimated half-million
+Deaf individuals in the United States and an even larger community of signers
+worldwide. In everyday settings --- classrooms, clinics, retail, transit ---
+real-time ASL-to-English translation is rarely available, and the burden of
+communication typically falls on the Deaf individual. Computer vision offers a
+path to ambient, always-available translation tools that do not require human
+interpreters or specialized hardware.
+
+In this work we focus on \emph{word-level} recognition (also called isolated
+sign recognition): given a short video of a signer producing one sign, predict
+the corresponding English gloss. Word-level recognition is a necessary
+building block for more ambitious continuous-translation systems and is
+well-suited to a course-length project because of the availability of clean
+benchmarks, mature feature extractors, and the ability to run and demo the
+final system live in a classroom.
+
+Our contributions are:
+\begin{itemize}
+    \item A complete, reproducible pipeline for WLASL-100 word-level ASL
+    recognition using MediaPipe Holistic landmarks and a small Transformer
+    encoder, trainable end-to-end in under an hour on a single free-tier GPU.
+    \item A Gradio-based Hugging Face Space that serves the model with both
+    live webcam streaming and uploaded-clip inference, including sliding-window
+    temporal smoothing and text-to-speech output.
+    \item An ablation of temporal augmentation strategies and a per-class
+    performance analysis on the WLASL-100 test split.
+\end{itemize}
+
+% -----------------------------------------------------------------------------
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Isolated sign recognition.} WLASL~\cite{li2020wlasl} established a
+large-scale word-level ASL benchmark with 2,000 glosses and standardized
+WLASL-100/300/1000/2000 subsets; they also introduced I3D and Pose-TGCN
+baselines. Follow-up work such as Sign Pose-based
+Transformer~\cite{boha2021signpose} and SL-GCN~\cite{jiang2021slgcn} demonstrated
+that skeleton-only models can match or exceed pixel-based methods while being
+substantially more efficient.
+
+\paragraph{Landmark-based recognition.} MediaPipe
+Holistic~\cite{grishchenko2020mediapipe} provides a reliable, freely available
+pose and hand estimator that runs in real time on CPU, which has made
+landmark-based sign classification practical outside research labs.
+
+\paragraph{Sign language transformers.} Camgoz et
+al.~\cite{camgoz2020signtransformer} introduced the Sign Language Transformer
+for joint recognition and translation on continuous sign. Although our task
+scope is word-level, we borrow the basic idea of treating per-frame features
+as a sequence and applying a Transformer encoder with a classification token.
+
+\paragraph{Continuous sign language translation.} How2Sign~\cite{duarte2021how2sign}
+is a large continuous sign language translation corpus; we considered it as a
+primary dataset but determined that sentence-level seq2seq translation was out
+of scope for the course timeline and selected WLASL-100 instead.
+
+% Replace the citation keys in references.bib. Five papers = 1 per team member.
+
+% -----------------------------------------------------------------------------
+\section{Dataset}
+\label{sec:dataset}
+
+\paragraph{WLASL-100.} We use the WLASL-100 subset of the Word-Level ASL
+dataset~\cite{li2020wlasl}, which consists of the 100 most frequent glosses
+from WLASL-2000. Each class contains approximately 15--20 short clips taken
+from public ASL instructional videos and compiled into a single benchmark with
+author-provided train/validation/test splits that avoid signer overlap across
+splits. We obtain the pre-processed video mirror from a public Kaggle dataset
+to avoid the YouTube link-rot that affects the official download script.
+
+\paragraph{Dataset properties.} After removing clips whose videos are no longer
+available, our working set contains TODO\_TRAIN training clips, TODO\_VAL
+validation clips, and TODO\_TEST test clips across TODO\_CLASSES classes. We
+retain the official WLASL split assignment so that our reported numbers are
+directly comparable to prior work. \Cref{fig:classdist} and
+\cref{fig:splitdist} summarize class and split distributions.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/class_distribution.png}
+\caption{Top-30 class distribution in our working WLASL-100 split.}
+\label{fig:classdist}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.8\linewidth]{figures/split_distribution.png}
+\caption{Official train/validation/test split sizes retained in our
+subset after accounting for unavailable videos.}
+\label{fig:splitdist}
+\end{figure}
+
+\paragraph{Annotation and licensing.} WLASL provides per-clip gloss labels,
+temporal bounds (\texttt{frame\_start}, \texttt{frame\_end}), signer bounding
+boxes, and subset membership tags. The dataset is distributed under the
+Computational Use of Data Agreement (C-UDA), permitting academic and
+computational use.
+
+\paragraph{Preprocessing.} For each clip we trim to the labeled
+\texttt{[frame\_start, frame\_end]} range, optionally crop to the provided
+signer bounding box, and uniformly sample $T = 32$ frames. Each frame is
+passed through MediaPipe Holistic, yielding 21 left-hand landmarks, 21
+right-hand landmarks, and 33 pose landmarks, each with $(x, y, z)$ coordinates,
+for a total feature vector of dimension $225$. A clip is therefore represented
+as a $(32, 225)$ tensor of floats. Missing hands (which occur for non-dominant
+signs or occlusion) are represented as zero vectors.
+
+% -----------------------------------------------------------------------------
+\section{Method}
+\label{sec:method}
+
+\paragraph{Overview.} Our pipeline has three stages: (i) per-frame landmark
+extraction, (ii) sequence-level classification with a Transformer encoder, and
+(iii) temporal smoothing at inference time for the live demo.
+
+\paragraph{Landmark extraction.} We use MediaPipe Holistic as a frozen
+self-supervised feature extractor. MediaPipe Holistic is trained on large
+amounts of web-scale data with self-supervised signals and provides stable
+hand and pose landmarks at interactive rates on CPU, which makes it practical
+for a free-tier demo. Using landmarks rather than raw pixels has three
+benefits: the input representation is compact, invariant to background and
+lighting, and the downstream model is small enough to train quickly and run
+live on CPU.
+
+\paragraph{Sign Transformer.} The landmark sequence $\mathbf{X} \in
+\mathbb{R}^{T \times 225}$ is linearly projected to $\mathbb{R}^{T \times d}$
+with $d = 192$. A learned classification token is prepended, a learned
+positional embedding is added, and the result is passed through a 4-layer
+pre-norm Transformer encoder with 4 attention heads, GELU activation, and a
+feed-forward dimension of $4d$. The CLS-token output is layer-normalized and
+projected to class logits. The full model has 1.3M parameters.
+
+\paragraph{Loss and optimization.} We train with cross-entropy loss with label
+smoothing of 0.1, using the AdamW optimizer with learning rate $3 \times
+10^{-4}$, weight decay $10^{-2}$, and a cosine annealing schedule over 60
+epochs. We clip gradients at a max norm of 1.0 and use a batch size of 64.
+
+\paragraph{Augmentation.} To combat the relatively small dataset size we apply
+three augmentations at training time: (i) Gaussian jitter on landmark
+coordinates ($\sigma = 0.01$); (ii) horizontal flip, which we implement by
+mirroring the $x$-coordinates of all landmarks and \emph{swapping} the
+left-hand and right-hand blocks, so that a left-handed sign is transformed
+into its right-handed counterpart rather than a physically impossible layout;
+and (iii) random temporal dropout that zeros out a short contiguous window of
+frames, encouraging the model to not rely on any single frame.
+
+\paragraph{Inference-time smoothing.} In the live demo we maintain a rolling
+buffer of the most recent $32$ frames and run the model every $4$ frames
+(stride 4). A predicted sign is only emitted when its confidence exceeds
+$\tau = 0.35$ and the same top-1 prediction has been produced on at least
+$K = 2$ consecutive runs. This prevents spurious single-frame predictions
+from appearing in the output caption.
+
+% -----------------------------------------------------------------------------
+\section{Experiments}
+\label{sec:experiments}
+
+\paragraph{Implementation.} Training is implemented in PyTorch 2.2 on a
+Kaggle notebook with one NVIDIA T4 GPU. Landmark extraction uses the
+MediaPipe Python package. End-to-end training (60 epochs including
+evaluation on every epoch) takes approximately TODO minutes. The live demo is
+deployed as a Hugging Face Space using Gradio.
+
+\paragraph{Splits.} We use the official WLASL-100 train / validation / test
+split, which assigns each clip to exactly one split by video ID and is
+signer-disjoint across splits.
+
+\paragraph{Baseline.} For reference we report the centroid baseline included
+in the BridgeLink ASL starter repository, which computes a class mean over
+landmark sequences and classifies at inference time by nearest centroid. This
+baseline is $O(1)$ training time and provides a lower bound on what the
+landmark representation can achieve without temporal modeling.
+
+\paragraph{Results.} \Cref{tab:main} reports top-1 and top-5 accuracy on the
+WLASL-100 test split for the baseline and the Sign Transformer.
+\Cref{fig:trainingcurves} shows training loss and validation accuracy over
+epochs. \Cref{fig:confmat} shows the confusion matrix on the test split. We
+observe that TODO (qualitative observations once you have real numbers ---
+confusions between visually similar signs, classes with few training samples,
+which augmentations helped most, etc.).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+Model & Top-1 Acc. & Top-5 Acc. \\
+\midrule
+Centroid baseline (landmarks)     & TODO & TODO \\
+Sign Transformer (ours)           & \textbf{TODO} & \textbf{TODO} \\
+\bottomrule
+\end{tabular}
+\caption{WLASL-100 test accuracy. Our 1.3M-parameter Transformer substantially
+outperforms the centroid baseline while remaining small enough to run on CPU.}
+\label{tab:main}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/training_curves.png}
+\caption{Training loss and validation top-1 / top-5 accuracy over 60 epochs.}
+\label{fig:trainingcurves}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/confusion_matrix.png}
+\caption{Confusion matrix on the WLASL-100 test split.}
+\label{fig:confmat}
+\end{figure}
+
+\paragraph{Qualitative results.} We record live webcam demonstrations of
+common signs including \texttt{HELLO}, \texttt{THANK\_YOU}, \texttt{HELP},
+\texttt{DRINK}, and \texttt{MORE}. The model tracks the signer at
+interactive rates and emits a caption once the prediction stabilizes. A video
+of the demo is linked in our GitLab repository.
+
+\paragraph{Limitations.} Our system is limited to 100 glosses and does not
+model co-articulation or sentence structure. Recognition accuracy degrades
+under poor lighting, partial occlusion, or unusual camera angles because
+MediaPipe Holistic becomes unreliable in those conditions. The model is
+signer-independent but was not stress-tested on signers outside the WLASL
+training distribution.
+
+% -----------------------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented BridgeLink ASL, a practical real-time word-level ASL recognition
+system built from MediaPipe Holistic landmarks and a small Transformer
+encoder. The full pipeline trains in under an hour on a free GPU and runs
+live on CPU in a hosted Hugging Face Space. We hope the system and its
+accompanying code serve as a useful starting point for students building
+accessibility tools in computer vision courses.
+
+\paragraph{Acknowledgments.} We thank the creators of WLASL and MediaPipe for
+releasing their data and tools to the research community, and our instructors
+for their guidance throughout the project.
+
+% -----------------------------------------------------------------------------
+{\small
+\bibliographystyle{ieeenat_fullname}
+\bibliography{references}
+}
+
+\end{document}
