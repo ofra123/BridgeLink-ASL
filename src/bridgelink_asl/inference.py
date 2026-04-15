@@ -143,7 +143,7 @@ class SignLanguageRuntime:
 
 
 def load_runtime(
-    local_path: Path | str = "models/cnn_landmark_best.pt",
+    local_path: Path | str = "models/cnn_landmark_wlasl25_best.pt",
     hf_repo: Optional[str] = None,
     hf_filename: str | None = None,
 ) -> SignLanguageRuntime:
@@ -162,13 +162,14 @@ def load_runtime(
             print(f"[bridgelink] HF Hub download failed ({exc}); falling back to local path")
 
     if not local_path.exists():
-        transformer_fallback = local_path.parent / "sign_transformer_best.pt"
-        if local_path.name == "cnn_landmark_best.pt" and transformer_fallback.exists():
-            local_path = transformer_fallback
+        fallback_names = ["cnn_landmark_best.pt", "sign_transformer_best.pt"]
+        for fallback_name in fallback_names:
+            fallback_path = local_path.parent / fallback_name
+            if fallback_path.exists():
+                local_path = fallback_path
+                break
         else:
-            expected = filename
-            if filename != "sign_transformer_best.pt":
-                expected += " or sign_transformer_best.pt"
+            expected = f"{filename}, cnn_landmark_best.pt, or sign_transformer_best.pt"
             raise FileNotFoundError(
                 f"Model weights not found at {local_path}. "
                 f"Train the model with the Colab notebook and place the .pt file there, "

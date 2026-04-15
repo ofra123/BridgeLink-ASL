@@ -49,6 +49,22 @@ allows and report them as an attention-based extension.
 
 ## 4. Build The CNN/VLM Eval Set
 
+## 4. Train The Smaller Live Demo CNN
+
+The notebook also trains a smaller WLASL-25 checkpoint for the live demo:
+
+```text
+/content/drive/MyDrive/BridgeLink-ASL/models/cnn_landmark_wlasl25_best.pt
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_metrics.json
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_training_curves.png
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_confusion_matrix.png
+```
+
+Use this checkpoint for Hugging Face Space because it is much more likely to
+behave well live than the full 100-class model.
+
+## 5. Build The CNN/VLM Eval Set
+
 The CNN/VLM notebook cell creates:
 
 ```text
@@ -59,7 +75,7 @@ The CNN/VLM notebook cell creates:
 Each row includes the true label, clip path, CNN top-1, CNN top-5 candidates,
 and a constrained prompt for the VLM.
 
-## 5. Score The VLM Reranker
+## 6. Score The VLM Reranker
 
 Copy the eval folder into:
 
@@ -92,16 +108,16 @@ CNN top-5 coverage
 VLM-reranked top-5 accuracy
 ```
 
-## 6. Deploy The Space
+## 7. Deploy The Space
 
 Upload `cnn_landmark_best.pt` to a Hugging Face model repo and set Space
 variables:
 
 ```text
 HF_MODEL_REPO=<username>/<model-repo>
-HF_MODEL_FILENAME=cnn_landmark_best.pt
+HF_MODEL_FILENAME=cnn_landmark_wlasl25_best.pt
 ```
 
 The Space can still load `sign_transformer_best.pt` if you set
 `HF_MODEL_FILENAME=sign_transformer_best.pt`, but the final demo should use the
-CNN checkpoint unless the professor asks for the Transformer extension.
+WLASL-25 CNN checkpoint unless the professor asks for the Transformer extension.

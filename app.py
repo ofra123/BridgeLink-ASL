@@ -7,8 +7,8 @@ as an extra-credit/attention model, and runs two demo modes:
 
 Set the HF_MODEL_REPO env var (e.g. "your-username/bridgelink-asl-wlasl100")
 to auto-download weights from the Hugging Face Hub on Space startup. If unset,
-the app looks for models/cnn_landmark_best.pt in the repo root, then falls back
-to models/sign_transformer_best.pt.
+the app looks for models/cnn_landmark_wlasl25_best.pt in the repo root, then
+falls back to models/cnn_landmark_best.pt and models/sign_transformer_best.pt.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ from bridgelink_asl.inference import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
-MODEL_FILENAME = os.environ.get("HF_MODEL_FILENAME", "cnn_landmark_best.pt").strip()
+MODEL_FILENAME = os.environ.get("HF_MODEL_FILENAME", "cnn_landmark_wlasl25_best.pt").strip()
 LOCAL_WEIGHTS = PROJECT_ROOT / "models" / MODEL_FILENAME
 SEQ_LEN = 32
 STRIDE = 4                     # run inference every STRIDE frames
@@ -68,7 +68,7 @@ def _require_runtime() -> SignLanguageRuntime:
         raise gr.Error(
             "Model weights are not available on this Space. "
             "Set the HF_MODEL_REPO env var or upload "
-            "models/cnn_landmark_best.pt to the repo."
+            "models/cnn_landmark_wlasl25_best.pt to the repo."
         )
     return RUNTIME
 

@@ -39,7 +39,8 @@ Open `http://127.0.0.1:7860` in your browser.
 ### Hugging Face Space
 
 The same app runs on a free CPU Space. Set the `HF_MODEL_REPO` environment
-variable in Space settings to a HF model repo containing `cnn_landmark_best.pt`.
+variable in Space settings to a HF model repo containing
+`cnn_landmark_wlasl25_best.pt` for the live demo.
 Set `HF_MODEL_FILENAME=sign_transformer_best.pt` only if you want to demo the
 optional Transformer checkpoint instead.
 
@@ -107,6 +108,7 @@ src/bridgelink_asl/
   (other modules)               Supporting pipeline code
 models/
   cnn_landmark_best.pt          Primary CNN weights (download from Drive after training)
+  cnn_landmark_wlasl25_best.pt  Smaller live-demo CNN weights
   sign_transformer_best.pt      Optional Transformer weights
   labels.json                   Label map
 results/
