@@ -15,3 +15,19 @@ Place the training outputs here after running the Colab notebook.
 | `classification_report.txt` | Report per-class precision/recall table |
 
 Copy these into `report/figures/` as well for the LaTeX build.
+
+## Hybrid VLM evaluation outputs
+
+Run:
+
+```bash
+python scripts/evaluate_hybrid_vlm.py --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl --output-dir results/vlm_eval
+```
+
+Expected generated files:
+
+| File | Used by |
+|---|---|
+| `vlm_eval/vlm_review_template.csv` | VLM/manual reranking worksheet with prompts and blank predictions |
+| `vlm_eval/vlm_hybrid_results.jsonl` | Merged eval rows, including VLM predictions after scoring |
+| `vlm_eval/vlm_hybrid_metrics.json` | Transformer top-1, top-5 coverage, and VLM rerank accuracy |

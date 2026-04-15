@@ -66,6 +66,31 @@ The training notebook is at `notebooks/train_wlasl100_colab.ipynb`. It runs on
 Google Colab (free T4 GPU) in about 60 minutes and saves all outputs to
 Google Drive.
 
+## Hybrid VLM Evaluation
+
+After the notebook creates `vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl`, copy
+that folder into the repo or point the script at the downloaded file:
+
+```bash
+python scripts/evaluate_hybrid_vlm.py ^
+  --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl ^
+  --output-dir results/vlm_eval
+```
+
+This writes a baseline metrics file plus `vlm_review_template.csv`. Fill the
+`vlm_prediction` column using a VLM that chooses from the Transformer's top-5
+candidate labels only, then rescore:
+
+```bash
+python scripts/evaluate_hybrid_vlm.py ^
+  --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl ^
+  --predictions results/vlm_eval/vlm_review_template.csv ^
+  --output-dir results/vlm_eval
+```
+
+Report the three comparison numbers: Transformer top-1 accuracy, Transformer
+top-5 coverage, and VLM-reranked top-5 accuracy.
+
 ## Repo Layout
 
 ```
