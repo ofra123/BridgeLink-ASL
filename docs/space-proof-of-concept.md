@@ -14,10 +14,10 @@ The hosted final product should be scoped as:
 
 The full research-grade version still needs:
 
-- Trey: real How2Sign/team clip data and sampled frame paths
-- Omar: trained CNN artifact from those frames
-- Frank: real Qwen2.5-VL runtime on GPU hardware
-- Dalen: final benchmark wrapper and metric export
+- real How2Sign subset clip data and sampled frame paths
+- a trained CNN artifact from those frames
+- real Qwen2.5-VL runtime on GPU hardware or precomputed VLM outputs
+- final benchmark metrics exported to `results/`
 
 ## What Runs Now
 
@@ -54,7 +54,7 @@ The default VLM target remains:
 Qwen/Qwen2.5-VL-32B-Instruct-AWQ
 ```
 
-This is still large. For a free or CPU Space, keep the current grounded mock VLM. For a GPU Space, Frank can replace the mock VLM function with a real Qwen provider while preserving the same JSON output contract.
+This is still large. For a free or CPU Space, keep the current grounded mock VLM. For a GPU Space, replace the mock VLM function with a real Qwen provider while preserving the same JSON output contract.
 
 ## Demo Script
 

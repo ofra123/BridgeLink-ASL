@@ -17,3 +17,7 @@ models/*
 data/processed/*.jsonl
 !data/processed/sample_landmarks.jsonl
 !data/processed/sample_sentence_clips.jsonl
+!data/processed/how2sign_subset.jsonl
+!data/processed/how2sign_subset.example.jsonl
+data/interim/frames/
+data/raw/how2sign/

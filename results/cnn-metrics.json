@@ -1,0 +1,78 @@
+{
+  "labels": [
+    "HOW2SIGN_FINISH_TASK",
+    "HOW2SIGN_HELLO_INTRO",
+    "HOW2SIGN_HELP_TASK",
+    "HOW2SIGN_STOP_CHECK"
+  ],
+  "total": 4,
+  "correct": 3,
+  "accuracy": 0.75,
+  "macro_precision": 0.625,
+  "macro_recall": 0.75,
+  "macro_f1": 0.6667,
+  "per_label": {
+    "HOW2SIGN_FINISH_TASK": {
+      "support": 1,
+      "true_positive": 1,
+      "false_positive": 1,
+      "false_negative": 0,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6667
+    },
+    "HOW2SIGN_HELLO_INTRO": {
+      "support": 1,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "HOW2SIGN_HELP_TASK": {
+      "support": 1,
+      "true_positive": 1,
+      "false_positive": 0,
+      "false_negative": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0
+    },
+    "HOW2SIGN_STOP_CHECK": {
+      "support": 1,
+      "true_positive": 0,
+      "false_positive": 0,
+      "false_negative": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "confusion_matrix": {
+    "HOW2SIGN_FINISH_TASK": {
+      "HOW2SIGN_FINISH_TASK": 1,
+      "HOW2SIGN_HELLO_INTRO": 0,
+      "HOW2SIGN_HELP_TASK": 0,
+      "HOW2SIGN_STOP_CHECK": 0
+    },
+    "HOW2SIGN_HELLO_INTRO": {
+      "HOW2SIGN_FINISH_TASK": 0,
+      "HOW2SIGN_HELLO_INTRO": 1,
+      "HOW2SIGN_HELP_TASK": 0,
+      "HOW2SIGN_STOP_CHECK": 0
+    },
+    "HOW2SIGN_HELP_TASK": {
+      "HOW2SIGN_FINISH_TASK": 0,
+      "HOW2SIGN_HELLO_INTRO": 0,
+      "HOW2SIGN_HELP_TASK": 1,
+      "HOW2SIGN_STOP_CHECK": 0
+    },
+    "HOW2SIGN_STOP_CHECK": {
+      "HOW2SIGN_FINISH_TASK": 1,
+      "HOW2SIGN_HELLO_INTRO": 0,
+      "HOW2SIGN_HELP_TASK": 0,
+      "HOW2SIGN_STOP_CHECK": 0
+    }
+  }
+}

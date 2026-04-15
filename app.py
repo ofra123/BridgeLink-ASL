@@ -16,6 +16,12 @@ if str(SRC_ROOT) not in sys.path:
 from bridgelink_asl.clip_dataset import load_clip_dataset  # noqa: E402
 from bridgelink_asl.cnn import CnnModelConfig, build_cnn_training_plan, describe_cnn_baseline  # noqa: E402
 from bridgelink_asl.config import load_config  # noqa: E402
+from bridgelink_asl.project_assets import (  # noqa: E402
+    build_comparison_results,
+    build_dataset_summary,
+    make_bar_chart_svg,
+    report_summary_markdown,
+)
 from bridgelink_asl.space_inference import result_to_markdown, run_space_poc  # noqa: E402
 
 
@@ -28,7 +34,7 @@ def predict_asl_clip(video: Any, mode: str) -> tuple[str, dict[str, Any]]:
 
 
 def cnn_plan() -> dict[str, Any]:
-    """Show Omar's CNN baseline plan in the hosted UI."""
+    """Show the CNN baseline plan in the hosted UI."""
 
     config = load_config()
     records = load_clip_dataset(config.clip_manifest_path)
@@ -45,6 +51,80 @@ def cnn_plan() -> dict[str, Any]:
         "cnn": describe_cnn_baseline(cnn_config, num_classes=len(plan.labels)),
         "plan": plan.as_dict(),
     }
+
+
+def dataset_dashboard() -> tuple[str, str, dict[str, Any]]:
+    """Return dataset text, charts, and JSON summary for the Space."""
+
+    records = _dashboard_records()
+    summary = build_dataset_summary(records)
+    markdown = f"""## How2Sign Subset Dataset
+
+Total clips: **{summary['total_clips']}**
+
+Sentence classes: **{summary['num_classes']}**
+
+The final workflow uses a small How2Sign subset manifest. Raw How2Sign videos
+stay outside Git; only metadata, sampled frame paths, and derived metrics belong
+in the repo/Space.
+"""
+    charts = "\n".join(
+        [
+            make_bar_chart_svg("Class distribution", summary["class_counts"]),
+            make_bar_chart_svg("Train/validation/test split", summary["split_counts"]),
+        ]
+    )
+    return markdown, charts, summary
+
+
+def experiments_dashboard() -> tuple[str, str, dict[str, Any]]:
+    """Return experiment text, SVG charts, and comparison JSON."""
+
+    comparison = build_comparison_results(_dashboard_records())
+    cnn = comparison["cnn_metrics"]
+    vlm = comparison["vlm_metrics"]
+    markdown = f"""## CNN vs VLM Experiment Scaffold
+
+CNN accuracy: **{cnn['accuracy']}**
+
+VLM score: **{vlm['accuracy']}**
+
+These metrics are scaffolded until real CNN and Qwen outputs are generated.
+The files/scripts are ready for real experiments: train CNN, run Qwen2.5-VL,
+then regenerate the same artifacts for the report and presentation.
+"""
+    charts = "\n".join(
+        [
+            comparison["comparison_chart_svg"],
+            comparison["confusion_matrix_svg"],
+        ]
+    )
+    compact = {
+        "status": comparison["status"],
+        "cnn_metrics": comparison["cnn_metrics"],
+        "vlm_metrics": comparison["vlm_metrics"],
+        "rows": comparison["rows"],
+    }
+    return markdown, charts, compact
+
+
+def report_dashboard() -> str:
+    """Return the CVPR-style report checklist."""
+
+    return report_summary_markdown()
+
+
+def _dashboard_records():
+    config = load_config()
+    candidates = [
+        Path("data/processed/how2sign_subset.jsonl"),
+        Path("data/processed/how2sign_subset.example.jsonl"),
+        config.clip_manifest_path,
+    ]
+    for path in candidates:
+        if path.exists():
+            return load_clip_dataset(path)
+    return load_clip_dataset(config.clip_manifest_path)
 
 
 with gr.Blocks(title="BridgeLink ASL") as demo:
@@ -115,11 +195,33 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
 
             ## What still requires project data/hardware
 
-            - Omar's trained CNN artifact needs real sampled frames from Trey.
-            - Frank's real Qwen2.5-VL-32B-AWQ inference needs GPU hardware and model setup.
-            - Dalen's final benchmark wrapper will replace the current PoC scoring with true test-set metrics.
+            - The trained CNN artifact needs real sampled frames from the How2Sign subset.
+            - Real Qwen2.5-VL-32B-AWQ inference needs GPU hardware and model setup.
+            - The final benchmark wrapper will replace the current PoC scoring with true test-set metrics.
             """
         )
+
+    with gr.Tab("Dataset"):
+        dataset_button = gr.Button("Load How2Sign Dataset Summary")
+        dataset_markdown = gr.Markdown(label="Dataset Summary")
+        dataset_charts = gr.HTML(label="Dataset Charts")
+        dataset_json = gr.JSON(label="Dataset JSON")
+        dataset_button.click(dataset_dashboard, outputs=[dataset_markdown, dataset_charts, dataset_json])
+
+    with gr.Tab("Experiments"):
+        experiments_button = gr.Button("Load CNN vs VLM Results")
+        experiments_markdown = gr.Markdown(label="Experiment Summary")
+        experiments_charts = gr.HTML(label="Experiment Charts")
+        experiments_json = gr.JSON(label="Experiment JSON")
+        experiments_button.click(
+            experiments_dashboard,
+            outputs=[experiments_markdown, experiments_charts, experiments_json],
+        )
+
+    with gr.Tab("Report"):
+        report_button = gr.Button("Show CVPR Report Checklist")
+        report_output = gr.Markdown(label="Report Checklist")
+        report_button.click(report_dashboard, outputs=report_output)
 
     with gr.Tab("CNN Plan"):
         plan_button = gr.Button("Show CNN Training Plan")

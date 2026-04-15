@@ -32,7 +32,7 @@ class CnnModelConfig:
 
 @dataclass(frozen=True)
 class CnnTrainingPlan:
-    """Dry-run summary for Omar's CNN branch."""
+    """Dry-run summary for the CNN branch."""
 
     labels: tuple[str, ...]
     split_distribution: dict[str, int]

@@ -54,6 +54,18 @@ Dry-run the CNN branch against the sentence clip manifest:
 train_cnn_model --clips data/processed/sample_sentence_clips.jsonl --dry-run
 ```
 
+Create a How2Sign subset manifest after downloading metadata outside Git:
+
+```powershell
+python scripts/create_how2sign_subset.py --metadata path\to\how2sign_train.csv --video-root data/raw/how2sign --output data/processed/how2sign_subset.jsonl
+```
+
+Generate dataset/results/report assets for the Space and final report:
+
+```powershell
+python scripts/generate_project_results.py --manifest data/processed/how2sign_subset.example.jsonl --output-dir results
+```
+
 Run the hosted Gradio UI locally:
 
 ```powershell
@@ -85,7 +97,9 @@ The demo works even before a trained model exists. If `models/dev-baseline.json`
 3. Phase 3: add the VLM sentence interpreter and comparison wrapper
 4. Phase 4: harden the demo, evaluation, and presentation flow
 
-Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, dataset guidance is in `docs/datasets.md`, and the team role split is in `docs/team-roles.md`.
+Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, dataset guidance is in `docs/datasets.md`, and the final workflow is in `docs/final-project-workflow.md`.
+
+The no-role execution plan is in `docs/project-execution-plan.md`.
 
 ## Hugging Face Space
 
@@ -103,7 +117,7 @@ webcam/uploaded clip
 -> comparison report and speech-ready text
 ```
 
-This is demo-complete, but not accuracy-complete. Real accuracy still requires How2Sign/team data, Omar's trained CNN artifact, and Frank's real Qwen2.5-VL runtime. See `docs/space-proof-of-concept.md`.
+This is demo-complete, but not accuracy-complete. Real accuracy still requires a downloaded How2Sign subset, a trained CNN artifact, and real Qwen2.5-VL runtime or precomputed VLM outputs. See `docs/space-proof-of-concept.md`.
 
 Default hosted VLM target:
 

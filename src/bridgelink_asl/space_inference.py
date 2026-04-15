@@ -71,8 +71,8 @@ def run_space_poc(video: Any, mode: str, *, vlm_model_id: str) -> dict[str, Any]
         "vlm": vlm_result,
         "comparison": _compare_outputs(cnn_result, vlm_result),
         "limitations": [
-            "CNN output uses a hosted deterministic video-feature baseline until Omar trains a real CNN artifact.",
-            "VLM output uses a grounded local fallback until Frank connects Qwen2.5-VL on GPU hardware.",
+            "CNN output uses a hosted deterministic video-feature baseline until a real CNN artifact is trained.",
+            "VLM output uses a grounded local fallback until Qwen2.5-VL is connected on GPU hardware.",
             "The Space is complete as a demo flow, not yet as a scientifically valid model benchmark.",
         ],
     }

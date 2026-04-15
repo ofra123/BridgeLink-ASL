@@ -21,6 +21,7 @@ class ClipDatasetRecord:
     source: str
     gloss: tuple[str, ...]
     english: str
+    sentence_label: str | None = None
     video_path: Path | None = None
     sampled_frames: tuple[Path, ...] = ()
     landmarks_path: Path | None = None
@@ -28,8 +29,10 @@ class ClipDatasetRecord:
 
     @property
     def label(self) -> str:
-        """Use the gloss sequence as the CNN class label."""
+        """Return the class label used by CNN metrics."""
 
+        if self.sentence_label:
+            return self.sentence_label
         return " ".join(self.gloss)
 
 
@@ -122,6 +125,7 @@ def _record_from_payload(payload: dict[str, Any]) -> ClipDatasetRecord:
         source=str(payload.get("source", "unknown")).strip(),
         gloss=gloss,
         english=str(payload.get("english", "")).strip(),
+        sentence_label=_optional_string(payload.get("sentence_label")),
         video_path=_optional_path(payload.get("video_path")),
         sampled_frames=sampled_frames,
         landmarks_path=_optional_path(payload.get("landmarks_path")),
@@ -134,3 +138,10 @@ def _optional_path(value: Any) -> Path | None:
         return None
     text = str(value).strip()
     return Path(text) if text else None
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None

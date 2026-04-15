@@ -1,0 +1,72 @@
+{
+  "dataset": "How2Sign subset",
+  "total_clips": 4,
+  "num_classes": 4,
+  "split_counts": {
+    "test": 1,
+    "train": 2,
+    "val": 1
+  },
+  "class_counts": {
+    "HOW2SIGN_FINISH_TASK": 1,
+    "HOW2SIGN_HELLO_INTRO": 1,
+    "HOW2SIGN_HELP_TASK": 1,
+    "HOW2SIGN_STOP_CHECK": 1
+  },
+  "source_counts": {
+    "how2sign-subset-template": 4
+  },
+  "missing_sampled_frames": [
+    "how2sign_subset_0001",
+    "how2sign_subset_0002",
+    "how2sign_subset_0003",
+    "how2sign_subset_0004"
+  ],
+  "example_records": [
+    {
+      "clip_id": "how2sign_subset_0001",
+      "split": "train",
+      "label": "HOW2SIGN_HELLO_INTRO",
+      "gloss": [
+        "HELLO",
+        "INTRO"
+      ],
+      "english": "Hello, today I will show you how to make a simple drink.",
+      "sampled_frame_count": 0
+    },
+    {
+      "clip_id": "how2sign_subset_0002",
+      "split": "train",
+      "label": "HOW2SIGN_HELP_TASK",
+      "gloss": [
+        "HELP",
+        "TASK"
+      ],
+      "english": "You may need help with this step.",
+      "sampled_frame_count": 0
+    },
+    {
+      "clip_id": "how2sign_subset_0003",
+      "split": "val",
+      "label": "HOW2SIGN_FINISH_TASK",
+      "gloss": [
+        "FINISHED",
+        "TASK"
+      ],
+      "english": "When you are finished, stop and check your work.",
+      "sampled_frame_count": 0
+    },
+    {
+      "clip_id": "how2sign_subset_0004",
+      "split": "test",
+      "label": "HOW2SIGN_STOP_CHECK",
+      "gloss": [
+        "STOP",
+        "CHECK"
+      ],
+      "english": "Stop and look at the result.",
+      "sampled_frame_count": 0
+    }
+  ],
+  "validation_issues": []
+}

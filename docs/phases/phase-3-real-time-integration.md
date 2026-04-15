@@ -17,10 +17,10 @@ Add a VLM-backed sentence interpreter and a wrapper that compares VLM output aga
 - add comparison output with clip ID, expected text, CNN prediction, VLM prediction, latency, and failure notes
 - support webcam-recorded short clips in the Gradio Space; true continuous VLM streaming remains a stretch goal
 
-## Owners
+## Implementation Notes
 
-- Dalen: wrapper modes, shared input contract, comparison logs
-- Frank: local Qwen2.5-VL provider, prompt, structured VLM output
+- Keep wrapper modes, shared input contract, and comparison logs together.
+- Keep the local Qwen2.5-VL provider, prompt, and structured VLM output behind a replaceable interface.
 
 ## Exit Criteria
 

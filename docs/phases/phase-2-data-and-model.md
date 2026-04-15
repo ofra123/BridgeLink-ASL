@@ -15,10 +15,10 @@ Move from isolated picture/word recognition to short gesture windows and impleme
 - keep the existing word classifier output as an optional token trace for later VLM grounding
 - document dataset licensing and avoid committing large videos directly to Git
 
-## Owners
+## Implementation Notes
 
-- Trey: How2Sign access, manifest, splits, frame extraction
-- Omar: CNN architecture, training, test accuracy, model artifact notes
+- Build the How2Sign subset manifest, splits, and frame extraction first.
+- Then train the CNN architecture and save model artifact notes plus test accuracy.
 
 ## Exit Criteria
 

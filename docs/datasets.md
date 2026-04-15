@@ -103,6 +103,16 @@ Record each sentence at least 5 times, ideally with more than one teammate signi
 
 For CNN training, `sampled_frames` must contain a fixed or pad-able sequence of local frame image paths. The default CNN config expects 16 sampled frames per clip.
 
+## How2Sign Subset Workflow
+
+Use `scripts/create_how2sign_subset.py` to convert downloaded How2Sign metadata into `data/processed/how2sign_subset.jsonl`.
+
+Use `scripts/prepare_clip_dataset.py --extract-frames` to sample frames into `data/interim/frames/`.
+
+Use `scripts/generate_project_results.py` to create report-ready metrics and SVG charts in `results/`.
+
+Large How2Sign videos and extracted frame folders must stay out of Git.
+
 ## Storage Rule
 
 Keep large assets out of Git. Store raw video clips in local `data/raw/`, OneDrive, Google Drive, or GitHub Releases if the team needs sharing. Commit only metadata, small samples, and scripts.

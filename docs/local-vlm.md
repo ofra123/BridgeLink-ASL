@@ -35,7 +35,7 @@ SentenceInterpreter
 
 The mock interpreter should always work without model downloads. The local Qwen2.5-VL interpreter should be enabled only when the model is installed and configured.
 
-The VLM path is now compared directly against the CNN baseline. It should consume the same clip manifest records as the CNN branch, then produce sentence-level JSON that Dalen's wrapper can score.
+The VLM path is now compared directly against the CNN baseline. It should consume the same clip manifest records as the CNN branch, then produce sentence-level JSON that the comparison wrapper can score.
 
 ## Prompting Rule
 
