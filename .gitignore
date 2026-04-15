@@ -1,4 +1,4 @@
-.venv/
+.venv*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -12,8 +12,7 @@ outputs/
 *.egg-info/
 .DS_Store
 Thumbs.db
-.venv
-__pycache__
-*.pyc
-models/
+models/*
+!models/README.md
 data/processed/*.jsonl
+!data/processed/sample_landmarks.jsonl

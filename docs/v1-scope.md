@@ -1,8 +1,8 @@
-# V1 Scope And Success Criteria
+# Scope And Success Criteria
 
-## Supported Vocabulary
+## Current Supported Vocabulary
 
-The phase-1 and phase-2 target set is intentionally small and demo-friendly:
+The current word-level target set remains intentionally small and demo-friendly:
 
 - `HELLO`
 - `YES`
@@ -17,20 +17,34 @@ The phase-1 and phase-2 target set is intentionally small and demo-friendly:
 - `MORE`
 - `FINISHED`
 
-## Success Criteria
+## Current Baseline Success Criteria
 
-The team can treat the starter milestone as complete when:
+The current baseline is successful when:
 
 - a teammate can clone the repo and install it locally
 - `run_demo` produces at least one translated event and transcript entry
 - `train_model` saves a baseline artifact from the sample dataset
 - `evaluate_model` produces metrics without manual editing
-- the output path stays resilient even if ElevenLabs or webcam access is unavailable
+- the output path stays resilient even if ElevenLabs, VLM access, or webcam access is unavailable
 
-## Out Of Scope For V1
+## Next Scope: Sentence Mode
 
-- full ASL sentence translation
-- continuous signing with grammar modeling
+The next project target is not full open-ended ASL translation. It is controlled sentence-level interpretation over short gesture windows.
+
+Sentence mode should support:
+
+- short 2-5 second clips
+- sampled keyframes from the clip
+- a token trace from the existing word-level classifier
+- VLM interpretation into one English sentence
+- mock/offline fallback when the VLM is unavailable
+
+## Still Out Of Scope
+
+- open-ended full ASL translation
+- long continuous conversations
+- production accessibility claims
 - production deployment
 - mandatory Firebase integration
 - mandatory cloud TTS during local demos
+- mandatory cloud VLM during local tests

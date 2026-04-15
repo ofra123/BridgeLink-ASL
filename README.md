@@ -50,12 +50,12 @@ The demo works even before a trained model exists. If `models/dev-baseline.json`
 
 ## Phase Overview
 
-1. Phase 1: repo foundation, guardrails, and placeholder pipeline
-2. Phase 2: data collection, landmark processing, and a baseline model
-3. Phase 3: real-time inference integration and speech output
-4. Phase 4: demo hardening, fallback flows, and submission polish
+1. Phase 1: stabilize the current repo and word-level baseline
+2. Phase 2: build sentence-window data and gesture trace support
+3. Phase 3: add the VLM sentence interpreter
+4. Phase 4: harden the demo, evaluation, and presentation flow
 
-Detailed phase documents live in `docs/phases`.
+Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, and dataset guidance is in `docs/datasets.md`.
 
 ## V1 Sign Scope
 

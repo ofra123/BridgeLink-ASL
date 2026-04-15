@@ -1,18 +1,21 @@
-# Phase 1: Repo Foundation And Guardrails
+# Phase 1: Stabilize Current Repo And Word-Level Baseline
 
 ## Goal
 
-Stand up the repo, the starter pipeline, and the shared documentation so the team can move without re-deciding structure every week.
+Lock down what already works before adding sentence-level VLM behavior. The repo currently supports a word/letter-style pipeline: frame source, landmark sample, classifier label, smoothing, text output, and speech fallback. Phase 1 makes that baseline reliable, documented, and easy for every teammate to run.
 
 ## Deliverables
 
-- clean Python repo scaffold
-- runnable `run_demo`, `train_model`, and `evaluate_model` entrypoints
-- V1 vocabulary and success criteria docs
-- starter tests and sample dataset
+- remove committed virtual environments and generated artifacts from Git tracking
+- keep `.venv/`, `.venv311/`, `outputs/`, `.tmp-tests/`, `models/*.json`, and large raw data out of normal commits unless explicitly approved
+- verify the current `run_demo`, `train_model`, and `evaluate_model` entrypoints still work after cleanup
+- keep the existing word-level pipeline as the fallback path for the final demo
+- document the current limitations: single-frame or stabilized-label output, not true ASL sentence understanding
 
 ## Exit Criteria
 
-- the app shell runs locally
-- a placeholder prediction travels from frame source to text to speech
-- teammates can install and verify the starter project quickly
+- a fresh clone installs without pulling a committed virtual environment
+- unit tests pass from a clean environment
+- the word-level demo can still emit text and speech output
+- the team can explain exactly what the current baseline does and does not do
+- the repo is safe to build on for sentence-window and VLM work

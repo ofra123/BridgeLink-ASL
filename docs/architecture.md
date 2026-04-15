@@ -10,6 +10,22 @@ BridgeLink ASL is organized around a simple perception-to-output loop:
 6. `speech.py` speaks the translated text with a selected provider.
 7. `pipeline.py` orchestrates the full loop and writes transcript events.
 
+## Next Architecture: Sentence Mode
+
+Sentence mode adds a layer above the current word-level baseline:
+
+```text
+camera frames
+-> sentence window builder
+-> sampled keyframes and landmark traces
+-> word-level token trace
+-> VLM sentence interpreter
+-> sentence event
+-> transcript and speech output
+```
+
+The VLM should receive both visual context and structured classifier output. This keeps the sentence output grounded and makes it easier to explain mistakes during the demo.
+
 ## Why This Shape
 
 - It keeps the demo working before the real model is trained.
@@ -19,6 +35,6 @@ BridgeLink ASL is organized around a simple perception-to-output loop:
 ## Phase-to-Code Mapping
 
 - Phase 1: current scaffold, built-in seed classifier, mock landmarks, mock TTS
-- Phase 2: replace the mock landmark path with real preprocessing and train a stronger classifier
-- Phase 3: wire live inference to the trained artifact and stabilize the user-facing transcript
-- Phase 4: improve reliability, startup checks, logging, and presentation workflow
+- Phase 2: collect sentence-window metadata and create token traces
+- Phase 3: add a mock and cloud VLM sentence interpreter
+- Phase 4: harden the live and backup demo paths

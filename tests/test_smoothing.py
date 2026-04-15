@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from bridgelink_asl.smoothing import PredictionSmoother
-from bridgelink_asl.types import Prediction
+from bridgelink_asl.asl_types import Prediction
 
 
 class SmoothingTests(unittest.TestCase):
