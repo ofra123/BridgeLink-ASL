@@ -2,46 +2,82 @@
 
 ## Goal
 
-The graded comparison is CNN baseline versus VLM sentence interpreter over the same sentence clip set.
+The final comparison is:
 
-## Models
-
-- CNN baseline: sampled clip frames -> sentence/gloss class.
-- VLM interpreter: sampled clip frames plus optional token trace -> natural English sentence, currently targeting `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`.
-
-The existing landmark/centroid word baseline stays useful as a fallback and optional VLM grounding trace, but it is not the main comparison model.
-
-## Shared Input Contract
-
-Both models consume records from the clip manifest:
-
-```json
-{
-  "clip_id": "team_hello_want_drink_001",
-  "split": "test",
-  "source": "team-recorded",
-  "gloss": ["HELLO", "WANT", "DRINK"],
-  "english": "Hello, I want a drink.",
-  "video_path": "data/raw/team_hello_want_drink_001.mp4",
-  "sampled_frames": [
-    "data/interim/frames/team_hello_want_drink_001/frame_0001.jpg"
-  ],
-  "landmarks_path": null,
-  "notes": "Controlled lighting, front-facing signer."
-}
+```text
+trained landmark CNN vs pretrained VLM reranking
 ```
 
-Large videos and frame dumps stay out of Git. Commit only manifests, scripts, and small metadata samples.
+The CNN is the trained computer vision model. The VLM is evaluated zero-shot as
+a visual reasoning model that reranks the CNN's top-5 candidates from the
+original signing clip.
+
+## Model A: Landmark CNN
+
+Input:
+
+```text
+32 frames x 225 MediaPipe landmark features
+```
+
+Architecture:
+
+```text
+BatchNorm1d
+Conv1d -> BatchNorm1d -> ReLU -> Dropout
+Conv1d -> BatchNorm1d -> ReLU -> MaxPool1d
+Conv1d -> BatchNorm1d -> ReLU -> Dropout
+AdaptiveAvgPool1d
+Linear classifier
+```
+
+Training defaults:
+
+```text
+loss: cross entropy with label smoothing 0.1
+optimizer: AdamW
+learning rate: 1e-3
+weight decay: 1e-2
+epochs: 50
+batch size: 64
+```
+
+Outputs:
+
+```text
+models/cnn_landmark_best.pt
+results/cnn_metrics.json
+results/cnn_training_curves.png
+results/cnn_confusion_matrix.png
+```
+
+## Model B: VLM Reranker
+
+The VLM is not fine-tuned. For each held-out clip, it receives:
+
+```text
+video clip
+CNN top-5 candidate labels
+prompt instructing it to choose only from those labels
+```
+
+This tests whether a pretrained vision-language model can improve the CNN's
+candidate selection without task-specific training.
 
 ## Metrics
 
-- CNN accuracy: exact gloss-sequence class match.
-- VLM accuracy: exact or rubric-scored English sentence match.
-- Shared metrics: latency per clip, failure count, missing-data count, and qualitative mistakes.
+Report:
 
-## Current Implementation
+```text
+CNN top-1 accuracy
+CNN top-5 coverage
+VLM-reranked top-5 accuracy
+precision / recall / F1 for CNN where available
+qualitative VLM successes and failures
+```
 
-- `clip_dataset.py` loads and validates clip manifests.
-- `cnn.py` defines the optional TensorFlow/Keras sampled-frame CNN.
-- `train_cnn_model --dry-run` validates the manifest and prints the CNN plan without requiring TensorFlow.
-- `train_cnn_model` without `--dry-run` trains the CNN when sampled frame paths and `.[training]` dependencies are available.
+## Optional Extra: Transformer
+
+The Transformer remains useful for the rubric category covering
+Transformers/attention/modern methods. It should be presented as an additional
+experiment, not the main CNN vs VLM comparison.

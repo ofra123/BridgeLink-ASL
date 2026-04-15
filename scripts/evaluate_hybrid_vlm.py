@@ -2,12 +2,12 @@
 
 Example:
     python scripts/evaluate_hybrid_vlm.py \
-        --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl \
+        --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl \
         --output-dir results/vlm_eval
 
 After filling the generated CSV's `vlm_prediction` column:
     python scripts/evaluate_hybrid_vlm.py \
-        --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl \
+        --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl \
         --predictions results/vlm_eval/vlm_review_template.csv \
         --output-dir results/vlm_eval
 """
@@ -79,8 +79,9 @@ def main() -> None:
 
     print(f"Samples: {metrics['num_samples']}")
     print(f"Classes: {metrics['num_classes']}")
-    print(f"Transformer top-1 accuracy: {metrics['transformer_top1_accuracy']:.3f}")
-    print(f"Transformer top-5 coverage: {metrics['transformer_top5_coverage']:.3f}")
+    print(f"Candidate model: {metrics['candidate_model']}")
+    print(f"Candidate top-1 accuracy: {metrics['candidate_top1_accuracy']:.3f}")
+    print(f"Candidate top-5 coverage: {metrics['candidate_top5_coverage']:.3f}")
     if metrics["vlm_rerank_accuracy"] is None:
         print("VLM rerank accuracy: not scored yet")
         print(f"Fill the vlm_prediction column in: {review_csv}")

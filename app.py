@@ -1,12 +1,14 @@
 """BridgeLink ASL — Hugging Face Space entrypoint.
 
-Loads a trained SignTransformer and runs two demo modes:
+Loads a trained landmark CNN by default, with Transformer checkpoints supported
+as an extra-credit/attention model, and runs two demo modes:
 - Live webcam streaming (frame-by-frame sliding window prediction).
 - Uploaded / recorded clip classification.
 
 Set the HF_MODEL_REPO env var (e.g. "your-username/bridgelink-asl-wlasl100")
 to auto-download weights from the Hugging Face Hub on Space startup. If unset,
-the app looks for models/sign_transformer_best.pt in the repo root.
+the app looks for models/cnn_landmark_best.pt in the repo root, then falls back
+to models/sign_transformer_best.pt.
 """
 
 from __future__ import annotations
@@ -39,7 +41,8 @@ from bridgelink_asl.inference import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
-LOCAL_WEIGHTS = PROJECT_ROOT / "models" / "sign_transformer_best.pt"
+MODEL_FILENAME = os.environ.get("HF_MODEL_FILENAME", "cnn_landmark_best.pt").strip()
+LOCAL_WEIGHTS = PROJECT_ROOT / "models" / MODEL_FILENAME
 SEQ_LEN = 32
 STRIDE = 4                     # run inference every STRIDE frames
 MIN_CONFIDENCE = 0.35          # below this, show nothing
@@ -49,7 +52,11 @@ RUNTIME: SignLanguageRuntime | None = None
 RUNTIME_ERROR: str | None = None
 
 try:
-    RUNTIME = load_runtime(local_path=LOCAL_WEIGHTS, hf_repo=MODEL_REPO or None)
+    RUNTIME = load_runtime(
+        local_path=LOCAL_WEIGHTS,
+        hf_repo=MODEL_REPO or None,
+        hf_filename=MODEL_FILENAME,
+    )
     print(f"[bridgelink] loaded model with {len(RUNTIME.labels)} classes")
 except Exception as exc:  # keep the Space bootable even if weights are missing
     RUNTIME_ERROR = f"{type(exc).__name__}: {exc}"
@@ -61,7 +68,7 @@ def _require_runtime() -> SignLanguageRuntime:
         raise gr.Error(
             "Model weights are not available on this Space. "
             "Set the HF_MODEL_REPO env var or upload "
-            "models/sign_transformer_best.pt to the repo."
+            "models/cnn_landmark_best.pt to the repo."
         )
     return RUNTIME
 
@@ -197,6 +204,7 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
 
 def load_metrics() -> dict[str, Any]:
     candidates = [
+        PROJECT_ROOT / "results" / "cnn_metrics.json",
         PROJECT_ROOT / "results" / "metrics.json",
         PROJECT_ROOT / "models" / "metrics.json",
     ]
@@ -212,6 +220,7 @@ def results_markdown() -> str:
         return m["status"]
     return (
         "## WLASL-100 results\n\n"
+        f"- Model: **{m.get('model', 'landmark model')}**\n"
         f"- Test top-1: **{m.get('test_top1', 0):.1%}**\n"
         f"- Test top-5: **{m.get('test_top5', 0):.1%}**\n"
         f"- Best val top-1: {m.get('val_top1_best', 0):.1%} "
@@ -240,7 +249,9 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
         # BridgeLink ASL
 
         Real-time American Sign Language word recognition using MediaPipe
-        landmarks and a lightweight Transformer classifier trained on WLASL-100.
+        landmarks and a lightweight CNN classifier trained on WLASL-100.
+        Transformer checkpoints are also supported as an attention-based
+        extension.
 
         {STATUS_BANNER}
         """
@@ -306,8 +317,8 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
             ## Method
 
             1. **Landmark extraction** — MediaPipe Holistic (21 left-hand + 21 right-hand + 33 pose landmarks × 3 coords = 225 dims per frame)
-            2. **Sequence model** — 4-layer Transformer encoder, 192-dim, 4 heads, CLS-token classification
-            3. **Training** — WLASL-100, 60 epochs, AdamW + cosine schedule, label smoothing, temporal + spatial augmentation
+            2. **Sequence model** — 1D landmark CNN over the 32-frame temporal sequence; optional Transformer extension for attention comparison
+            3. **Training** — WLASL-100, AdamW + cosine schedule, label smoothing, temporal + spatial augmentation
             4. **Inference** — rolling 32-frame buffer, stride 4, confidence threshold 0.35, stability filter of 2 consecutive frames before emission
 
             ## Dataset

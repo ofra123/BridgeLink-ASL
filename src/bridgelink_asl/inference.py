@@ -25,7 +25,7 @@ FEAT_DIM = 21 * 3 + 21 * 3 + 33 * 3  # 225
 # Model definition — identical architecture to the training notebook
 # ---------------------------------------------------------------------------
 
-def _build_model(config: dict):
+def _build_transformer_model(config: dict):
     import torch
     import torch.nn as nn
 
@@ -64,6 +64,60 @@ def _build_model(config: dict):
     )
 
 
+def _build_cnn_model(config: dict):
+    import torch
+    import torch.nn as nn
+
+    class LandmarkCNN(nn.Module):
+        def __init__(
+            self,
+            num_classes: int,
+            feat_dim: int = 225,
+            channels: tuple[int, int, int] = (128, 128, 256),
+            dropout: float = 0.35,
+        ):
+            super().__init__()
+            c1, c2, c3 = channels
+            self.features = nn.Sequential(
+                nn.BatchNorm1d(feat_dim),
+                nn.Conv1d(feat_dim, c1, kernel_size=3, padding=1),
+                nn.BatchNorm1d(c1),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.Conv1d(c1, c2, kernel_size=3, padding=1),
+                nn.BatchNorm1d(c2),
+                nn.ReLU(),
+                nn.MaxPool1d(kernel_size=2),
+                nn.Conv1d(c2, c3, kernel_size=3, padding=1),
+                nn.BatchNorm1d(c3),
+                nn.ReLU(),
+                nn.Dropout(dropout),
+                nn.AdaptiveAvgPool1d(1),
+            )
+            self.head = nn.Linear(c3, num_classes)
+
+        def forward(self, x):
+            h = x.transpose(1, 2)
+            h = self.features(h).squeeze(-1)
+            return self.head(h)
+
+    return LandmarkCNN(
+        num_classes=config["num_classes"],
+        feat_dim=config.get("feat_dim", 225),
+        channels=tuple(config.get("channels", (128, 128, 256))),
+        dropout=config.get("dropout", 0.35),
+    )
+
+
+def _build_model(config: dict):
+    """Build the runtime model declared by a checkpoint config."""
+
+    model_type = str(config.get("model_type", "transformer")).lower()
+    if model_type in {"cnn", "landmark_cnn", "temporal_cnn"}:
+        return _build_cnn_model(config)
+    return _build_transformer_model(config)
+
+
 # ---------------------------------------------------------------------------
 # Runtime wrapper
 # ---------------------------------------------------------------------------
@@ -89,28 +143,37 @@ class SignLanguageRuntime:
 
 
 def load_runtime(
-    local_path: Path | str = "models/sign_transformer_best.pt",
+    local_path: Path | str = "models/cnn_landmark_best.pt",
     hf_repo: Optional[str] = None,
+    hf_filename: str | None = None,
 ) -> SignLanguageRuntime:
     """Load model weights from a local path, with optional HF Hub fallback."""
     import torch
 
     local_path = Path(local_path)
+    filename = hf_filename or local_path.name
 
     if hf_repo:
         try:
             from huggingface_hub import hf_hub_download
-            downloaded = hf_hub_download(repo_id=hf_repo, filename="sign_transformer_best.pt")
+            downloaded = hf_hub_download(repo_id=hf_repo, filename=filename)
             local_path = Path(downloaded)
         except Exception as exc:
             print(f"[bridgelink] HF Hub download failed ({exc}); falling back to local path")
 
     if not local_path.exists():
-        raise FileNotFoundError(
-            f"Model weights not found at {local_path}. "
-            f"Train the model with the Kaggle notebook and place the .pt file there, "
-            f"or set HF_MODEL_REPO to a HF model repo containing sign_transformer_best.pt."
-        )
+        transformer_fallback = local_path.parent / "sign_transformer_best.pt"
+        if local_path.name == "cnn_landmark_best.pt" and transformer_fallback.exists():
+            local_path = transformer_fallback
+        else:
+            expected = filename
+            if filename != "sign_transformer_best.pt":
+                expected += " or sign_transformer_best.pt"
+            raise FileNotFoundError(
+                f"Model weights not found at {local_path}. "
+                f"Train the model with the Colab notebook and place the .pt file there, "
+                f"or set HF_MODEL_REPO to a HF model repo containing {expected}."
+            )
 
     ckpt = torch.load(local_path, map_location="cpu", weights_only=False)
     config = ckpt["config"]

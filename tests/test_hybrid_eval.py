@@ -17,30 +17,33 @@ def _rows() -> list[dict[str, object]]:
     return [
         {
             "video_id": "a1",
+            "candidate_model": "cnn_landmark",
             "true_label": "basketball",
             "video_path": "clips/a1.mp4",
-            "transformer_top1": "ball",
-            "transformer_top5": [
+            "cnn_top1": "ball",
+            "cnn_top5": [
                 {"label": "ball", "confidence": 0.4},
                 {"label": "basketball", "confidence": 0.3},
             ],
         },
         {
             "video_id": "b2",
+            "candidate_model": "cnn_landmark",
             "true_label": "change",
             "video_path": "clips/b2.mp4",
-            "transformer_top1": "change",
-            "transformer_top5": [
+            "cnn_top1": "change",
+            "cnn_top5": [
                 {"label": "change", "confidence": 0.7},
                 {"label": "argue", "confidence": 0.1},
             ],
         },
         {
             "video_id": "c3",
+            "candidate_model": "cnn_landmark",
             "true_label": "doctor",
             "video_path": "clips/c3.mp4",
-            "transformer_top1": "before",
-            "transformer_top5": [{"label": "before", "confidence": 0.5}],
+            "cnn_top1": "before",
+            "cnn_top5": [{"label": "before", "confidence": 0.5}],
         },
     ]
 
@@ -59,8 +62,11 @@ def test_compute_hybrid_metrics_scores_baseline_and_vlm() -> None:
 
     assert metrics["num_samples"] == 3
     assert metrics["num_classes"] == 3
-    assert metrics["transformer_top1_accuracy"] == 0.3333
-    assert metrics["transformer_top5_coverage"] == 0.6667
+    assert metrics["candidate_model"] == "cnn_landmark"
+    assert metrics["candidate_top1_accuracy"] == 0.3333
+    assert metrics["candidate_top5_coverage"] == 0.6667
+    assert metrics["cnn_top1_accuracy"] == 0.3333
+    assert metrics["cnn_top5_coverage"] == 0.6667
     assert metrics["vlm_evaluated_samples"] == 3
     assert metrics["vlm_rerank_accuracy"] == 0.6667
 
