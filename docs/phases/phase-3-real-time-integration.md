@@ -15,6 +15,7 @@ Add a VLM-backed sentence interpreter and a wrapper that compares VLM output aga
 - require a mock/local interpreter for tests and offline demos
 - add confidence and fallback behavior: if the VLM is uncertain, use the token trace as a simple gloss sentence instead of hallucinating
 - add comparison output with clip ID, expected text, CNN prediction, VLM prediction, latency, and failure notes
+- support webcam-recorded short clips in the Gradio Space; true continuous VLM streaming remains a stretch goal
 
 ## Owners
 

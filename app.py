@@ -106,17 +106,50 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
         """
         # BridgeLink ASL
 
-        CNN vs VLM ASL sentence recognition demo. The hosted Space starts in
-        mock mode so the UI stays usable while the CNN artifact and Qwen VLM
-        runtime are being prepared.
+        CNN vs VLM ASL sentence recognition demo. Record a short webcam clip
+        or upload a clip, then run CNN, VLM, or Compare mode.
+
+        The hosted Space starts in mock mode so the UI stays usable while the
+        CNN artifact and Qwen VLM runtime are being prepared. For the 32B VLM,
+        short captured clips are the practical "live" path; true continuous
+        streaming is a stretch goal because large VLM inference is slow.
         """
     )
     with gr.Tab("Run Demo"):
-        video_input = gr.Video(label="Upload a short ASL clip")
+        gr.Markdown(
+            """
+            Use the webcam option to record a 2-5 second signing clip. This is
+            the recommended hosted-demo flow for Hugging Face Spaces.
+            """
+        )
+        video_input = gr.Video(
+            label="Upload or record a short ASL clip",
+            sources=["upload", "webcam"],
+            format="mp4",
+            include_audio=False,
+        )
         mode_input = gr.Dropdown(["Compare", "CNN", "VLM"], value="Compare", label="Mode")
         run_button = gr.Button("Run BridgeLink ASL")
         output = gr.JSON(label="Result")
         run_button.click(predict_asl_clip, inputs=[video_input, mode_input], outputs=output)
+
+    with gr.Tab("Webcam Only"):
+        gr.Markdown(
+            """
+            This tab forces webcam recording only. Record a short sentence clip,
+            stop recording, then run the same comparison pipeline.
+            """
+        )
+        webcam_input = gr.Video(
+            label="Record webcam signing clip",
+            sources="webcam",
+            format="mp4",
+            include_audio=False,
+        )
+        webcam_mode = gr.Dropdown(["Compare", "CNN", "VLM"], value="Compare", label="Mode")
+        webcam_button = gr.Button("Run Captured Webcam Clip")
+        webcam_output = gr.JSON(label="Result")
+        webcam_button.click(predict_asl_clip, inputs=[webcam_input, webcam_mode], outputs=webcam_output)
 
     with gr.Tab("CNN Plan"):
         plan_button = gr.Button("Show CNN Training Plan")

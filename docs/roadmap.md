@@ -64,5 +64,6 @@ The final demo should support two flows:
 - `cnn` mode: short clip/window input classified by the sampled-frame CNN
 - `vlm` mode: short clip/window input interpreted by Qwen2.5-VL
 - `compare` mode: run CNN and VLM on the same clip manifest and report accuracy/latency/failure modes
+- `webcam clip` mode: record a short live clip in the Gradio Space, then run the same compare flow
 
 The backup demo should use pre-recorded sentence clips if live signing or API access fails.

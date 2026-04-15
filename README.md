@@ -91,6 +91,8 @@ Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/
 
 The Space entrypoint is `app.py`. It starts in mock mode so the hosted UI works before the full CNN artifact and Qwen runtime are installed.
 
+The hosted UI supports both uploaded videos and webcam-recorded clips through Gradio. For the 32B VLM path, the recommended "live" demo is recording a short 2-5 second webcam clip and then running inference. True continuous frame-by-frame VLM streaming is a stretch goal because large VLM inference is too slow for a simple Space demo.
+
 Default hosted VLM target:
 
 - `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`
