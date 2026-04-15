@@ -7,6 +7,7 @@ The current starter build focuses on:
 - a runnable webcam-demo shell with synthetic fallback
 - a hand-landmark style pipeline boundary that can later swap to MediaPipe
 - a lightweight centroid baseline for training and evaluation
+- an optional sampled-frame CNN baseline for professor-requested model comparison
 - optional speech adapters with mock fallback
 - docs and phase artifacts that keep the team aligned
 
@@ -38,6 +39,19 @@ Evaluate the saved model:
 evaluate_model --dataset data/processed/sample_landmarks.jsonl --model models/dev-baseline.json
 ```
 
+Dry-run the CNN branch against the sentence clip manifest:
+
+```powershell
+train_cnn_model --clips data/processed/sample_sentence_clips.jsonl --dry-run
+```
+
+Real CNN training requires sampled frame paths in the manifest and the optional training dependencies:
+
+```powershell
+pip install -e ".[training]"
+train_cnn_model --clips data/processed/how2sign_clips.jsonl --output models/cnn-baseline.keras
+```
+
 The demo works even before a trained model exists. If `models/dev-baseline.json` is missing, the pipeline falls back to the built-in seed classifier so the end-to-end flow remains usable during phase 1.
 
 ## Repo Layout
@@ -51,11 +65,11 @@ The demo works even before a trained model exists. If `models/dev-baseline.json`
 ## Phase Overview
 
 1. Phase 1: stabilize the current repo and word-level baseline
-2. Phase 2: build sentence-window data and gesture trace support
-3. Phase 3: add the VLM sentence interpreter
+2. Phase 2: build sentence-window data and the CNN baseline
+3. Phase 3: add the VLM sentence interpreter and comparison wrapper
 4. Phase 4: harden the demo, evaluation, and presentation flow
 
-Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, and dataset guidance is in `docs/datasets.md`.
+Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, dataset guidance is in `docs/datasets.md`, and the team role split is in `docs/team-roles.md`.
 
 ## V1 Sign Scope
 

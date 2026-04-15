@@ -22,6 +22,9 @@ class ConfigTests(unittest.TestCase):
                 {
                     "camera_index": 2,
                     "model_path": "models/custom.json",
+                    "clip_manifest_path": "data/processed/custom-clips.jsonl",
+                    "cnn_model_path": "models/custom-cnn.keras",
+                    "cnn_frame_count": 12,
                     "demo_sequence": ["hello", "help"],
                     "use_camera": False,
                 }
@@ -35,4 +38,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.tts_provider, "console")
         self.assertEqual(config.demo_sequence, ("HELLO", "HELP"))
         self.assertFalse(config.use_camera)
+        self.assertEqual(config.cnn_frame_count, 12)
         self.assertTrue(str(config.model_path).endswith(str(Path("models") / "custom.json")))
+        self.assertTrue(str(config.clip_manifest_path).endswith(str(Path("data") / "processed" / "custom-clips.jsonl")))
+        self.assertTrue(str(config.cnn_model_path).endswith(str(Path("models") / "custom-cnn.keras")))

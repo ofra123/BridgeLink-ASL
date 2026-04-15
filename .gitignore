@@ -16,3 +16,4 @@ models/*
 !models/README.md
 data/processed/*.jsonl
 !data/processed/sample_landmarks.jsonl
+!data/processed/sample_sentence_clips.jsonl

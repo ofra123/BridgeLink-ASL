@@ -20,6 +20,8 @@ Use it for:
 - testing sentence-window metadata
 - comparing our clip schema to a real research dataset
 - selecting a few example clips for offline experiments if storage allows
+- extracting sampled frames for the CNN baseline
+- providing the same test clips for CNN versus VLM comparison
 
 Constraints:
 
@@ -98,6 +100,8 @@ Record each sentence at least 5 times, ideally with more than one teammate signi
   "notes": "Controlled lighting, front-facing signer."
 }
 ```
+
+For CNN training, `sampled_frames` must contain a fixed or pad-able sequence of local frame image paths. The default CNN config expects 16 sampled frames per clip.
 
 ## Storage Rule
 

@@ -11,7 +11,12 @@ The repo currently has a working word-level architecture:
 - text translation and speech fallback
 - data collection support for isolated sign landmark samples
 
-This is a good baseline, but it does not yet understand sentence-level ASL. Sentence understanding needs short video windows because meaning depends on motion, ordering, timing, facial context, and grammar.
+This is a good baseline, but it does not yet satisfy the professor-requested model comparison. The next version needs two comparable paths over the same sentence clips: a CNN baseline and a VLM interpretation path.
+
+The LSTM/landmark path is now a possible stretch or support tool, not the core comparison. For the graded comparison, the two headline models are:
+
+- CNN baseline: sampled video frames from a clip -> sentence/gloss class
+- VLM path: sampled frames plus optional token trace -> natural English sentence
 
 ## Local VLM Choice
 
@@ -32,8 +37,8 @@ We are not planning to depend on a cloud model for the final demo. The local mod
 ## Updated Four Phases
 
 1. Stabilize the current repo and word-level baseline.
-2. Build sentence-window data and gesture trace support.
-3. Add the VLM sentence interpreter.
+2. Build sentence-window data and the CNN baseline.
+3. Add the VLM sentence interpreter and comparison wrapper.
 4. Harden the final demo and evaluation story.
 
 The detailed phase docs live in `docs/phases`.
@@ -43,20 +48,21 @@ The detailed phase docs live in `docs/phases`.
 ```text
 camera frames
 -> sentence window builder
--> sampled keyframes plus landmark traces
--> word-level classifier token trace
--> VLM sentence interpreter
--> sentence event
+-> sampled keyframes
+-> CNN baseline OR VLM sentence interpreter
+-> comparable model result
 -> transcript and speech output
 ```
 
-The VLM should not replace the current classifier immediately. It should use the classifier output as grounding so it produces safer, more explainable sentences.
+The CNN and VLM must read the same clip manifest so accuracy, latency, and failure cases can be compared fairly. The existing word classifier can still provide a token trace as grounding for the VLM, but it is not the main model being compared.
 
 ## Demo Target
 
 The final demo should support two flows:
 
 - `word` mode: current stable baseline that emits recognized signs
-- `sentence` mode: short clip/window input that emits a natural English sentence
+- `cnn` mode: short clip/window input classified by the sampled-frame CNN
+- `vlm` mode: short clip/window input interpreted by Qwen2.5-VL
+- `compare` mode: run CNN and VLM on the same clip manifest and report accuracy/latency/failure modes
 
 The backup demo should use pre-recorded sentence clips if live signing or API access fails.

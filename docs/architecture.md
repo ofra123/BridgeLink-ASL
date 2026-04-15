@@ -12,19 +12,18 @@ BridgeLink ASL is organized around a simple perception-to-output loop:
 
 ## Next Architecture: Sentence Mode
 
-Sentence mode adds a layer above the current word-level baseline:
+Sentence mode now has two model branches so the team can compare CNN against VLM:
 
 ```text
 camera frames
 -> sentence window builder
--> sampled keyframes and landmark traces
--> word-level token trace
--> VLM sentence interpreter
--> sentence event
+-> sampled keyframes
+-> CNN baseline OR VLM interpreter
+-> comparable model result
 -> transcript and speech output
 ```
 
-The VLM should receive both visual context and structured classifier output. This keeps the sentence output grounded and makes it easier to explain mistakes during the demo.
+The CNN branch receives fixed-length sampled frame stacks and predicts one of the supported sentence/gloss classes. The VLM branch receives sampled frames, and optionally the current word-token trace, then outputs a natural English sentence. Both branches use the same clip manifest so the comparison is fair.
 
 ## Why This Shape
 
@@ -35,6 +34,6 @@ The VLM should receive both visual context and structured classifier output. Thi
 ## Phase-to-Code Mapping
 
 - Phase 1: current scaffold, built-in seed classifier, mock landmarks, mock TTS
-- Phase 2: collect sentence-window metadata and create token traces
-- Phase 3: add a mock and cloud VLM sentence interpreter
+- Phase 2: collect sentence-window metadata and train the sampled-frame CNN baseline
+- Phase 3: add a mock/local VLM sentence interpreter and comparison wrapper
 - Phase 4: harden the live and backup demo paths
