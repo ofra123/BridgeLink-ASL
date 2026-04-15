@@ -93,6 +93,18 @@ The Space entrypoint is `app.py`. It starts in mock mode so the hosted UI works 
 
 The hosted UI supports both uploaded videos and webcam-recorded clips through Gradio. For the 32B VLM path, the recommended "live" demo is recording a short 2-5 second webcam clip and then running inference. True continuous frame-by-frame VLM streaming is a stretch goal because large VLM inference is too slow for a simple Space demo.
 
+The Space branch now runs a complete proof-of-concept pipeline:
+
+```text
+webcam/uploaded clip
+-> OpenCV video feature extraction
+-> CNN-style hosted baseline
+-> VLM-style grounded sentence output
+-> comparison report and speech-ready text
+```
+
+This is demo-complete, but not accuracy-complete. Real accuracy still requires How2Sign/team data, Omar's trained CNN artifact, and Frank's real Qwen2.5-VL runtime. See `docs/space-proof-of-concept.md`.
+
 Default hosted VLM target:
 
 - `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`

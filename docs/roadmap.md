@@ -67,3 +67,9 @@ The final demo should support two flows:
 - `webcam clip` mode: record a short live clip in the Gradio Space, then run the same compare flow
 
 The backup demo should use pre-recorded sentence clips if live signing or API access fails.
+
+## Hosted Proof-Of-Concept Status
+
+The Hugging Face Space branch now supports a complete hosted PoC flow. It does not require a trained CNN artifact or real Qwen runtime to boot. Instead, it uses video features and grounded fallback outputs while preserving the same result shape that the real models will use.
+
+This means the project is possible as a Space-hosted final product if the final scope is a proof of concept. A fully accurate production version depends on dataset collection, CNN training, and GPU-backed VLM integration.

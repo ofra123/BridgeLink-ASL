@@ -19,6 +19,7 @@ Trey:
 - Create `data/processed/how2sign_clips.jsonl` using the sample schema.
 - Extract 16 sampled frames per clip into local `data/interim/frames/...`.
 - Do not commit raw videos or large frame dumps.
+- Verify that at least 8-12 team-recorded clips can be uploaded to the Space demo for backup presentation flow.
 
 Dalen:
 
@@ -26,6 +27,7 @@ Dalen:
 - Make sure both model paths consume the same clip manifest.
 - Write results to `outputs/comparison-results.jsonl`.
 - Track latency and failures for each clip.
+- Replace the hosted PoC comparison payload only after real CNN/VLM outputs match the existing JSON contract.
 
 Omar:
 
@@ -33,6 +35,7 @@ Omar:
 - Once Trey has frame paths, install `pip install -e ".[training]"`.
 - Train `models/cnn-baseline.keras` from the How2Sign/team clip manifest.
 - Report held-out test accuracy, confusion examples, and what signs/sentences fail most often.
+- Use the hosted PoC CNN output fields as the contract for the trained model output.
 
 Frank:
 
@@ -40,6 +43,7 @@ Frank:
 - Build a `SentenceInterpreter` interface with mock and local Qwen providers.
 - Prompt the VLM to return strict JSON with gloss, sentence, confidence, and failure reason.
 - Compare VLM output against the same `english` targets in the manifest.
+- Replace the hosted grounded mock VLM only when GPU-backed inference is available and stable.
 
 ## Definition Of Done For The Comparison
 

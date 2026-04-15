@@ -12,6 +12,7 @@ Turn the sentence-level prototype into a class-ready demo with clear evaluation,
 - transcript examples showing raw token trace, VLM sentence, confidence, and fallback behavior
 - short limitations section covering ASL grammar, dataset size, VLM hallucination risk, and privacy
 - polished README with setup, commands, dataset notes, and demo recovery steps
+- Hugging Face Space proof-of-concept flow with upload, webcam clip recording, CNN/VLM comparison output, and fallback messaging
 
 ## Exit Criteria
 
@@ -20,3 +21,4 @@ Turn the sentence-level prototype into a class-ready demo with clear evaluation,
 - at least 5 sentence examples are tested end to end
 - the final presentation can explain why sentence-level ASL needs temporal context
 - the repo is clean, documented, and ready for grading
+- the Space can boot without a trained CNN artifact or local Qwen model, then clearly reports fallback mode
