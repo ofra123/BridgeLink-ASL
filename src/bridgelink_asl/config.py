@@ -61,7 +61,7 @@ class AppConfig:
     cnn_batch_size: int = 4
     cnn_epochs: int = 8
     vlm_provider: str = "mock"
-    vlm_model_id: str = "Qwen/Qwen2.5-VL-72B-Instruct"
+    vlm_model_id: str = "Qwen/Qwen2.5-VL-32B-Instruct-AWQ"
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str | None = None
 

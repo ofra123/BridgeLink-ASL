@@ -20,17 +20,17 @@ The LSTM/landmark path is now a possible stretch or support tool, not the core c
 
 ## Local VLM Choice
 
-The planned local VLM is `Qwen/Qwen2.5-VL-72B-Instruct`.
+The planned 30B-class VLM is `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`.
 
 Reasons:
 
-- it is the largest instruction-tuned model in the Qwen2.5-VL collection
+- it is a practical 32B AWQ quantized Qwen2.5-VL target
 - it supports image and video-style inputs
 - it has explicit long-video and temporal event-understanding support
 - it can produce structured outputs, which we need for parseable sentence events
 - it can accept sampled frames plus a structured token trace from our current classifier
 
-This is a high-hardware local model. If the team machine cannot run the 72B model smoothly, use `Qwen/Qwen2.5-VL-72B-Instruct-AWQ` as the first fallback and `Qwen/Qwen2.5-VL-7B-Instruct` as the emergency lower-hardware fallback. The project must also keep a `mock` VLM provider for tests and offline demos.
+This is still a high-hardware model. If the team machine or Hugging Face Space cannot run the 32B AWQ model smoothly, use `Qwen/Qwen2.5-VL-7B-Instruct` as the emergency lower-hardware fallback. If stronger hardware is available, the original `Qwen/Qwen2.5-VL-72B-Instruct` target can remain a stretch comparison. The project must also keep a `mock` VLM provider for tests and offline demos.
 
 We are not planning to depend on a cloud model for the final demo. The local model should be downloaded ahead of time, and the demo should still have a no-network fallback.
 

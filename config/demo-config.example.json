@@ -18,7 +18,7 @@
   "cnn_batch_size": 4,
   "cnn_epochs": 8,
   "vlm_provider": "mock",
-  "vlm_model_id": "Qwen/Qwen2.5-VL-72B-Instruct",
+  "vlm_model_id": "Qwen/Qwen2.5-VL-32B-Instruct-AWQ",
   "demo_sequence": [
     "HELLO",
     "YES",

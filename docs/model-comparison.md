@@ -7,7 +7,7 @@ The graded comparison is CNN baseline versus VLM sentence interpreter over the s
 ## Models
 
 - CNN baseline: sampled clip frames -> sentence/gloss class. This is Omar's model.
-- VLM interpreter: sampled clip frames plus optional token trace -> natural English sentence. This is Frank's model.
+- VLM interpreter: sampled clip frames plus optional token trace -> natural English sentence. This is Frank's model, currently targeting `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`.
 
 The existing landmark/centroid word baseline stays useful as a fallback and optional VLM grounding trace, but it is not the main comparison model.
 

@@ -1,3 +1,11 @@
+---
+title: BridgeLink ASL
+sdk: gradio
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # BridgeLink ASL
 
 BridgeLink ASL is a Python-first proof of concept for real-time American Sign Language recognition, text translation, and speech output. This repo is intentionally scaffolded to support the four class-project phases without locking the team into a web stack too early.
@@ -5,6 +13,7 @@ BridgeLink ASL is a Python-first proof of concept for real-time American Sign La
 The current starter build focuses on:
 
 - a runnable webcam-demo shell with synthetic fallback
+- a Gradio/Hugging Face Space entrypoint for hosted demos
 - a hand-landmark style pipeline boundary that can later swap to MediaPipe
 - a lightweight centroid baseline for training and evaluation
 - an optional sampled-frame CNN baseline for professor-requested model comparison
@@ -45,6 +54,13 @@ Dry-run the CNN branch against the sentence clip manifest:
 train_cnn_model --clips data/processed/sample_sentence_clips.jsonl --dry-run
 ```
 
+Run the hosted Gradio UI locally:
+
+```powershell
+pip install -r requirements.txt
+python app.py
+```
+
 Real CNN training requires sampled frame paths in the manifest and the optional training dependencies:
 
 ```powershell
@@ -70,6 +86,16 @@ The demo works even before a trained model exists. If `models/dev-baseline.json`
 4. Phase 4: harden the demo, evaluation, and presentation flow
 
 Detailed phase documents live in `docs/phases`. The updated roadmap is in `docs/roadmap.md`, local VLM guidance is in `docs/local-vlm.md`, dataset guidance is in `docs/datasets.md`, and the team role split is in `docs/team-roles.md`.
+
+## Hugging Face Space
+
+The Space entrypoint is `app.py`. It starts in mock mode so the hosted UI works before the full CNN artifact and Qwen runtime are installed.
+
+Default hosted VLM target:
+
+- `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`
+
+This is the practical 30B-class Qwen2.5-VL target for the hosted experiment. The original 72B model remains a possible high-hardware stretch path, but 32B AWQ is the current default.
 
 ## V1 Sign Scope
 

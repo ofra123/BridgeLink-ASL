@@ -7,7 +7,7 @@ Add a VLM-backed sentence interpreter and a wrapper that compares VLM output aga
 ## Deliverables
 
 - add a `SentenceInterpreter` interface with mock and cloud-backed implementations
-- use `Qwen/Qwen2.5-VL-72B-Instruct` as the planned local VLM, with `Qwen/Qwen2.5-VL-72B-Instruct-AWQ` as the first fallback and `Qwen/Qwen2.5-VL-7B-Instruct` as the emergency lower-hardware fallback
+- use `Qwen/Qwen2.5-VL-32B-Instruct-AWQ` as the planned 30B-class VLM, with `Qwen/Qwen2.5-VL-7B-Instruct` as the emergency lower-hardware fallback and `Qwen/Qwen2.5-VL-72B-Instruct` as a high-hardware stretch target
 - add `GestureWindow`, `DetectedGestureToken`, and `SentenceEvent` types
 - update the pipeline so it supports `word`, `cnn`, `vlm`, and `compare` modes
 - use the current classifier and smoother to produce token traces for each sentence window

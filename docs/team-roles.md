@@ -36,7 +36,7 @@ Omar:
 
 Frank:
 
-- Download or prepare `Qwen/Qwen2.5-VL-72B-Instruct`, with AWQ or 7B fallback if hardware is tight.
+- Download or prepare `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`, with 7B fallback if hardware is tight and 72B as a stretch if strong hardware is available.
 - Build a `SentenceInterpreter` interface with mock and local Qwen providers.
 - Prompt the VLM to return strict JSON with gloss, sentence, confidence, and failure reason.
 - Compare VLM output against the same `english` targets in the manifest.
