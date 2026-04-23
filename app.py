@@ -32,7 +32,8 @@ if str(SRC_ROOT) not in sys.path:
 from bridgelink_asl.inference import (  # noqa: E402
     SignLanguageRuntime,
     load_runtime,
-    extract_landmarks_from_frame,
+    process_frame_for_landmarks,
+    draw_tracking_overlay,
     extract_landmarks_from_video,
 )
 
@@ -82,6 +83,9 @@ def init_live_state() -> dict[str, Any]:
         "buffer": deque(maxlen=SEQ_LEN),
         "frame_idx": 0,
         "last_label": None,
+        "candidate_label": None,
+        "candidate_confidence": None,
+        "candidate_top5": [],
         "stable_count": 0,
         "caption": "",
         "history": [],
@@ -94,12 +98,12 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
     if state is None:
         state = init_live_state()
     if frame is None:
-        return frame, state["caption"], state
+        return None, _status_markdown(state), state
 
     runtime = _require_runtime()
 
     # Extract landmarks for this frame and append to the rolling buffer.
-    lm = extract_landmarks_from_frame(frame)
+    lm, tracking_result = process_frame_for_landmarks(frame)
     state["buffer"].append(lm)
     state["frame_idx"] += 1
 
@@ -112,6 +116,9 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
         sequence = np.stack(list(state["buffer"]))   # (32, 225)
         label, confidence, top5 = runtime.predict(sequence)
         state["last_inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        state["candidate_label"] = label
+        state["candidate_confidence"] = confidence
+        state["candidate_top5"] = top5
 
         if confidence >= MIN_CONFIDENCE:
             if label == state["last_label"]:
@@ -129,7 +136,15 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
                     state["history"] = state["history"][-12:]  # keep last 12
                     state["caption"] = _format_caption(state["history"])
 
-    return frame, _status_markdown(state), state
+    tracking_overlay = draw_tracking_overlay(
+        frame,
+        tracking_result,
+        label=state.get("candidate_label"),
+        confidence=state.get("candidate_confidence"),
+        top5=state.get("candidate_top5"),
+        buffer_size=len(state["buffer"]),
+    )
+    return tracking_overlay, _status_markdown(state), state
 
 
 def _format_caption(history: list[str]) -> str:
@@ -141,12 +156,15 @@ def _format_caption(history: list[str]) -> str:
 
 def _status_markdown(state: dict[str, Any]) -> str:
     caption = state.get("caption") or "_Start signing..._"
-    last_label = state.get("last_label") or "—"
+    last_label = state.get("candidate_label") or "--"
+    confidence = state.get("candidate_confidence")
+    confidence_text = f"{confidence:.1%}" if confidence is not None else "--"
     infer = state.get("last_inference_ms", 0.0)
     buf = len(state["buffer"]) if state.get("buffer") is not None else 0
     return (
         f"### Caption\n\n{caption}\n\n"
         f"- Current candidate: **{last_label}**\n"
+        f"- Candidate confidence: **{confidence_text}**\n"
         f"- Buffer: {buf}/{SEQ_LEN} frames\n"
         f"- Last inference: {infer} ms"
     )
@@ -272,14 +290,20 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
                     type="numpy",
                     label="Webcam",
                 )
+                tracking_view = gr.Image(
+                    type="numpy",
+                    label="MediaPipe tracking overlay",
+                    interactive=False,
+                )
             with gr.Column(scale=1):
                 live_status = gr.Markdown(_status_markdown(init_live_state()))
                 reset_btn = gr.Button("Reset caption")
         webcam.stream(
             on_live_frame,
             inputs=[webcam, live_state],
-            outputs=[webcam, live_status, live_state],
+            outputs=[tracking_view, live_status, live_state],
             show_progress="hidden",
+            stream_every=0.2,
         )
         reset_btn.click(reset_live, outputs=[live_state, live_status])
 

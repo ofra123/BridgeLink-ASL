@@ -218,20 +218,177 @@ def _flatten_lm(landmarks, n: int) -> np.ndarray:
     ).flatten()
 
 
-def extract_landmarks_from_frame(frame_bgr_or_rgb: np.ndarray) -> np.ndarray:
-    """Extract a 225-d landmark vector from a single BGR or RGB frame."""
-    # Gradio streams RGB numpy arrays, OpenCV capture returns BGR.
-    # MediaPipe expects RGB. We assume RGB (the common streaming case);
-    # if the caller has BGR they should convert first.
-    if frame_bgr_or_rgb.ndim != 3:
-        return np.zeros(FEAT_DIM, dtype=np.float32)
-
-    holistic = _get_holistic()
-    result = holistic.process(frame_bgr_or_rgb)
+def _landmarks_from_result(result) -> np.ndarray:
     lh = _flatten_lm(result.left_hand_landmarks, 21)
     rh = _flatten_lm(result.right_hand_landmarks, 21)
     pose = _flatten_lm(result.pose_landmarks, 33)
     return np.concatenate([lh, rh, pose]).astype(np.float32)
+
+
+def process_frame_for_landmarks(frame_bgr_or_rgb: np.ndarray):
+    """Run MediaPipe once and return both landmark features and raw tracking."""
+    # Gradio streams RGB numpy arrays, OpenCV capture returns BGR.
+    # MediaPipe expects RGB. We assume RGB (the common streaming case);
+    # if the caller has BGR they should convert first.
+    if frame_bgr_or_rgb.ndim != 3:
+        return np.zeros(FEAT_DIM, dtype=np.float32), None
+
+    holistic = _get_holistic()
+    result = holistic.process(frame_bgr_or_rgb)
+    return _landmarks_from_result(result), result
+
+
+def extract_landmarks_from_frame(frame_bgr_or_rgb: np.ndarray) -> np.ndarray:
+    """Extract a 225-d landmark vector from a single BGR or RGB frame."""
+    landmarks, _ = process_frame_for_landmarks(frame_bgr_or_rgb)
+    return landmarks
+
+
+def _normalized_points(landmarks, width: int, height: int) -> list[tuple[int, int]]:
+    if landmarks is None:
+        return []
+    points = []
+    for point in landmarks.landmark:
+        x = int(np.clip(point.x, 0.0, 1.0) * width)
+        y = int(np.clip(point.y, 0.0, 1.0) * height)
+        points.append((x, y))
+    return points
+
+
+def _draw_landmark_group(
+    frame: np.ndarray,
+    landmarks,
+    label: str,
+    color: tuple[int, int, int],
+) -> bool:
+    """Draw landmark dots and a bounding box for one MediaPipe group."""
+    import cv2
+
+    height, width = frame.shape[:2]
+    points = _normalized_points(landmarks, width, height)
+    if not points:
+        return False
+
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    pad = 12
+    x1 = max(min(xs) - pad, 0)
+    y1 = max(min(ys) - pad, 0)
+    x2 = min(max(xs) + pad, width - 1)
+    y2 = min(max(ys) + pad, height - 1)
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+    cv2.putText(
+        frame,
+        label,
+        (x1, max(y1 - 8, 18)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        color,
+        2,
+        cv2.LINE_AA,
+    )
+    for x, y in points:
+        cv2.circle(frame, (x, y), 3, color, -1)
+    return True
+
+
+def draw_tracking_overlay(
+    frame_rgb: np.ndarray,
+    tracking_result,
+    label: str | None = None,
+    confidence: float | None = None,
+    top5: list[tuple[str, float]] | None = None,
+    buffer_size: int = 0,
+) -> np.ndarray:
+    """Draw MediaPipe tracking boxes and current model state on an RGB frame."""
+    import cv2
+
+    if frame_rgb.ndim != 3:
+        return frame_rgb
+
+    annotated = np.ascontiguousarray(frame_rgb.copy())
+    if tracking_result is None:
+        return annotated
+
+    left_seen = _draw_landmark_group(
+        annotated,
+        tracking_result.left_hand_landmarks,
+        "left hand",
+        (0, 210, 255),
+    )
+    right_seen = _draw_landmark_group(
+        annotated,
+        tracking_result.right_hand_landmarks,
+        "right hand",
+        (80, 255, 120),
+    )
+    pose_seen = _draw_landmark_group(
+        annotated,
+        tracking_result.pose_landmarks,
+        "pose",
+        (255, 170, 40),
+    )
+
+    status = []
+    if left_seen:
+        status.append("L hand")
+    if right_seen:
+        status.append("R hand")
+    if pose_seen:
+        status.append("pose")
+    status_text = "Tracking: " + (", ".join(status) if status else "no landmarks")
+
+    panel_h = 88 if top5 else 58
+    cv2.rectangle(annotated, (10, 10), (560, panel_h), (12, 12, 12), -1)
+    cv2.rectangle(annotated, (10, 10), (560, panel_h), (255, 255, 255), 1)
+    cv2.putText(
+        annotated,
+        status_text,
+        (22, 34),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+
+    if label:
+        label_text = label.replace("_", " ").title()
+        if confidence is not None:
+            label_text = f"Candidate: {label_text} ({confidence:.0%})"
+        else:
+            label_text = f"Candidate: {label_text}"
+    else:
+        label_text = f"Collecting frames: {buffer_size}/{SEQ_LEN_DEFAULT}"
+    cv2.putText(
+        annotated,
+        label_text,
+        (22, 62),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (255, 220, 120),
+        2,
+        cv2.LINE_AA,
+    )
+
+    if top5:
+        top3 = ", ".join(
+            f"{name.replace('_', ' ')} {score:.0%}"
+            for name, score in top5[:3]
+        )
+        cv2.putText(
+            annotated,
+            f"Top: {top3}",
+            (22, 86),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (210, 230, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+    return annotated
 
 
 def extract_landmarks_from_video(
