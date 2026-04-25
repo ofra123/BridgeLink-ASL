@@ -29,6 +29,10 @@ data/processed/
 *.mov
 landmarks/
 *.npy
+!data/vlm_eval_wlasl25_cnn/
+!data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
+!data/vlm_eval_wlasl25_cnn/clips/
+!data/vlm_eval_wlasl25_cnn/clips/*.mp4
 
 # Model weights — commit the .pt only if < 10 MB, otherwise use HF Hub
 # Uncomment the next line if you DON'T want weights in git:

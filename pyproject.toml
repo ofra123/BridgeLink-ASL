@@ -32,6 +32,7 @@ dev = ["pytest>=8.3"]
 
 [project.scripts]
 bridgelink-demo = "bridgelink_asl.cli.run_demo:main"
+run_wrapper = "bridgelink_asl.cli.run_wrapper:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bridgelink_asl"]
