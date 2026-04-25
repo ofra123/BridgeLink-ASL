@@ -98,6 +98,19 @@ Report the three comparison numbers: CNN top-1 accuracy, CNN top-5 coverage,
 and VLM-reranked top-5 accuracy. The Transformer result is kept as an optional
 attention/extra-credit experiment.
 
+## Wrapper Scaffold
+
+The repo also includes a sentence-wrapper CLI for phase-3 style comparisons
+over clip manifests:
+
+```bash
+run_wrapper --mode compare --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
+```
+
+Today this wrapper is a scaffold around the existing CNN/VLM project. The mock
+interpreter works offline for testing; the local Qwen path is still a
+placeholder contract.
+
 ## Repo Layout
 
 ```
@@ -105,6 +118,7 @@ app.py                          Gradio Space entrypoint
 requirements.txt                Space / local dependencies
 src/bridgelink_asl/
   inference.py                  CNN/Transformer loader + MediaPipe extraction runtime
+  wrapper.py                    Sentence wrapper scaffold for cnn/vlm/compare runs
   (other modules)               Supporting pipeline code
 models/
   cnn_landmark_best.pt          Primary CNN weights (download from Drive after training)
