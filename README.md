@@ -54,6 +54,12 @@ Dry-run the CNN branch against the sentence clip manifest:
 train_cnn_model --clips data/processed/sample_sentence_clips.jsonl --dry-run
 ```
 
+Run the phase-3 sentence wrapper against the same clip manifest:
+
+```powershell
+run_wrapper --mode compare --manifest data/processed/sample_sentence_clips.jsonl
+```
+
 Run the hosted Gradio UI locally:
 
 ```powershell
@@ -73,6 +79,7 @@ The demo works even before a trained model exists. If `models/dev-baseline.json`
 ## Repo Layout
 
 - `src/bridgelink_asl`: app package, runtime pipeline, training, and evaluation logic
+- `run_wrapper`: phase-3 wrapper command for `cnn`, `vlm`, and `compare` clip-manifest runs
 - `tests`: unit and smoke tests for config, data validation, smoothing, translation, speech selection, and the demo loop
 - `data`: dataset guidance plus a small sample landmark dataset
 - `models`: saved baseline artifacts

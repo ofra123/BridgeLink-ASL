@@ -38,6 +38,7 @@ run_demo = "bridgelink_asl.cli.run_demo:main"
 train_model = "bridgelink_asl.cli.train_model:main"
 evaluate_model = "bridgelink_asl.cli.evaluate_model:main"
 train_cnn_model = "bridgelink_asl.cli.train_cnn_model:main"
+run_wrapper = "bridgelink_asl.cli.run_wrapper:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bridgelink_asl"]
