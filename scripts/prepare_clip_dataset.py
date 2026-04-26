@@ -17,8 +17,8 @@ from bridgelink_asl.project_assets import build_dataset_summary  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prepare and validate a How2Sign subset manifest.")
-    parser.add_argument("--manifest", default="data/processed/how2sign_subset.jsonl")
+    parser = argparse.ArgumentParser(description="Prepare and validate a BridgeLink clip manifest.")
+    parser.add_argument("--manifest", default="data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl")
     parser.add_argument("--summary-output", default="results/dataset-summary.json")
     parser.add_argument("--require-frames", action="store_true")
     parser.add_argument("--extract-frames", action="store_true", help="Extract sampled frames from local video paths.")

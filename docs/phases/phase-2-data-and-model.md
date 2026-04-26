@@ -1,31 +1,28 @@
-# Phase 2: Sentence-Window Dataset And CNN Baseline
+# Phase 2: WLASL Data And CNN Baseline
 
 ## Goal
 
-Move from isolated picture/word recognition to short gesture windows and implement the professor-requested CNN baseline. A sentence cannot be understood from one still image, so this phase creates clip-level data that both CNN and VLM paths can share.
+Move from placeholder demos to a real video-based classifier using WLASL and a
+landmark CNN baseline.
 
 ## Deliverables
 
-- choose How2Sign as the external sentence-level ASL dataset for reference and experiments
-- create a small team-owned demo dataset of 8-12 sentence clips using the project vocabulary
-- define a JSONL clip schema with `clip_id`, `split`, `gloss`, `english`, frame references, optional landmarks, and notes
-- add a sentence-window collector that groups frames over a configurable time span instead of treating each frame independently
-- extract fixed-length sampled frame stacks for CNN training, starting with 16 frames per clip
-- implement and train a sampled-frame CNN baseline that predicts the sentence/gloss class
-- keep the existing word classifier output as an optional token trace for later VLM grounding
-- document dataset licensing and avoid committing large videos directly to Git
+- finalize WLASL-100 as the main training dataset
+- define the WLASL-25 subset used for live demo and VLM reranking
+- extract fixed-length landmark sequences from labeled clips
+- implement and train the temporal CNN baseline
+- save model artifacts and label metadata for local and Hugging Face use
+- document dataset licensing and keep large raw downloads out of Git
 
 ## Implementation Notes
 
-- Build the How2Sign subset manifest, splits, and frame extraction first.
-- Then train the CNN architecture and save model artifact notes plus test accuracy.
+- Use MediaPipe Holistic to convert each clip into a `(32, 225)` landmark tensor.
+- Train the CNN baseline first, then derive the WLASL-25 demo checkpoint.
+- Reuse the same WLASL-25 clips for the CNN versus VLM comparison.
 
 ## Exit Criteria
 
-- the repo contains a small metadata-only sample sentence dataset
-- the team can collect or reference clip windows without changing the existing word-level fallback
-- the sentence-window format is stable enough for both CNN training and VLM prompting
-- the CNN dry-run works on the manifest without TensorFlow
-- CNN training works once sampled frames and TensorFlow dependencies are installed
-- at least 5 demo sentences have known expected English outputs
-- the team can explain which external dataset is being used and why
+- the repo contains a stable WLASL evaluation manifest
+- the CNN dry-run works locally
+- the trained checkpoint loads in the Gradio app
+- the team can explain why WLASL matches the final project scope

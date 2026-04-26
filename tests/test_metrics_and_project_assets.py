@@ -26,24 +26,24 @@ class MetricsAndProjectAssetsTests(unittest.TestCase):
         self.assertIn("A", metrics.per_label)
         self.assertIn("B", metrics.confusion_matrix)
 
-    def test_how2sign_example_manifest_builds_assets(self) -> None:
+    def test_wlasl_hybrid_manifest_builds_assets(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        manifest = root / "data" / "processed" / "how2sign_subset.example.jsonl"
+        manifest = root / "data" / "vlm_eval_wlasl25_cnn" / "wlasl25_cnn_hybrid_eval.jsonl"
         records = load_clip_dataset(manifest)
 
         summary = build_dataset_summary(records)
         comparison = build_comparison_results(records)
         report = report_summary_markdown()
 
-        self.assertEqual(summary["dataset"], "How2Sign subset")
-        self.assertEqual(summary["total_clips"], 4)
+        self.assertEqual(summary["dataset"], "WLASL-25 hybrid evaluation subset")
+        self.assertEqual(summary["total_clips"], 36)
         self.assertIn("cnn_metrics", comparison)
         self.assertIn("<svg", comparison["comparison_chart_svg"])
         self.assertIn("CVPR-Style", report)
 
     def test_write_comparison_artifacts(self) -> None:
         root = Path(__file__).resolve().parents[1]
-        manifest = root / "data" / "processed" / "how2sign_subset.example.jsonl"
+        manifest = root / "data" / "vlm_eval_wlasl25_cnn" / "wlasl25_cnn_hybrid_eval.jsonl"
         output_dir = root / ".tmp-tests" / "report-assets"
 
         paths = write_comparison_artifacts(manifest, output_dir)

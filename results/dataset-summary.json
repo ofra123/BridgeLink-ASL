@@ -1,72 +1,170 @@
 {
-  "dataset": "How2Sign subset",
-  "total_clips": 4,
-  "num_classes": 4,
+  "dataset": "WLASL-25 hybrid evaluation subset",
+  "total_clips": 36,
+  "num_classes": 22,
   "split_counts": {
-    "test": 1,
-    "train": 2,
-    "val": 1
+    "test": 36
   },
   "class_counts": {
-    "HOW2SIGN_FINISH_TASK": 1,
-    "HOW2SIGN_HELLO_INTRO": 1,
-    "HOW2SIGN_HELP_TASK": 1,
-    "HOW2SIGN_STOP_CHECK": 1
+    "accident": 2,
+    "before": 3,
+    "bowling": 1,
+    "candy": 3,
+    "change": 1,
+    "computer": 1,
+    "cool": 2,
+    "corn": 2,
+    "cousin": 2,
+    "dark": 2,
+    "drink": 1,
+    "go": 1,
+    "help": 2,
+    "shirt": 2,
+    "short": 1,
+    "tall": 1,
+    "thanksgiving": 1,
+    "thin": 2,
+    "trade": 1,
+    "what": 3,
+    "who": 1,
+    "yes": 1
   },
   "source_counts": {
-    "how2sign-subset-template": 4
+    "landmark_cnn": 36
   },
-  "missing_sampled_frames": [
-    "how2sign_subset_0001",
-    "how2sign_subset_0002",
-    "how2sign_subset_0003",
-    "how2sign_subset_0004"
-  ],
+  "candidate_label_stats": {
+    "min": 5,
+    "max": 5,
+    "mean": 5.0
+  },
   "example_records": [
     {
-      "clip_id": "how2sign_subset_0001",
-      "split": "train",
-      "label": "HOW2SIGN_HELLO_INTRO",
-      "gloss": [
-        "HELLO",
-        "INTRO"
-      ],
-      "english": "Hello, today I will show you how to make a simple drink.",
-      "sampled_frame_count": 0
-    },
-    {
-      "clip_id": "how2sign_subset_0002",
-      "split": "train",
-      "label": "HOW2SIGN_HELP_TASK",
-      "gloss": [
-        "HELP",
-        "TASK"
-      ],
-      "english": "You may need help with this step.",
-      "sampled_frame_count": 0
-    },
-    {
-      "clip_id": "how2sign_subset_0003",
-      "split": "val",
-      "label": "HOW2SIGN_FINISH_TASK",
-      "gloss": [
-        "FINISHED",
-        "TASK"
-      ],
-      "english": "When you are finished, stop and check your work.",
-      "sampled_frame_count": 0
-    },
-    {
-      "clip_id": "how2sign_subset_0004",
+      "clip_id": "17713",
       "split": "test",
-      "label": "HOW2SIGN_STOP_CHECK",
+      "label": "drink",
       "gloss": [
-        "STOP",
-        "CHECK"
+        "government"
       ],
-      "english": "Stop and look at the result.",
-      "sampled_frame_count": 0
+      "english": "drink",
+      "candidate_labels": [
+        "government",
+        "theory",
+        "because",
+        "black",
+        "apple"
+      ]
+    },
+    {
+      "clip_id": "12320",
+      "split": "test",
+      "label": "computer",
+      "gloss": [
+        "computer"
+      ],
+      "english": "computer",
+      "candidate_labels": [
+        "computer",
+        "snow",
+        "move",
+        "dark",
+        "balance"
+      ]
+    },
+    {
+      "clip_id": "05727",
+      "split": "test",
+      "label": "before",
+      "gloss": [
+        "accident"
+      ],
+      "english": "before",
+      "candidate_labels": [
+        "accident",
+        "write",
+        "play",
+        "secretary",
+        "room"
+      ]
+    },
+    {
+      "clip_id": "05739",
+      "split": "test",
+      "label": "before",
+      "gloss": [
+        "good"
+      ],
+      "english": "before",
+      "candidate_labels": [
+        "good",
+        "write",
+        "before",
+        "room",
+        "what"
+      ]
+    },
+    {
+      "clip_id": "05741",
+      "split": "test",
+      "label": "before",
+      "gloss": [
+        "before"
+      ],
+      "english": "before",
+      "candidate_labels": [
+        "before",
+        "why",
+        "pizza",
+        "call",
+        "theory"
+      ]
+    },
+    {
+      "clip_id": "24960",
+      "split": "test",
+      "label": "go",
+      "gloss": [
+        "go"
+      ],
+      "english": "go",
+      "candidate_labels": [
+        "go",
+        "cool",
+        "shirt",
+        "accident",
+        "thin"
+      ]
+    },
+    {
+      "clip_id": "63226",
+      "split": "test",
+      "label": "who",
+      "gloss": [
+        "orange"
+      ],
+      "english": "who",
+      "candidate_labels": [
+        "orange",
+        "yes",
+        "tell",
+        "who",
+        "pizza"
+      ]
+    },
+    {
+      "clip_id": "65300",
+      "split": "test",
+      "label": "candy",
+      "gloss": [
+        "sweet"
+      ],
+      "english": "candy",
+      "candidate_labels": [
+        "sweet",
+        "thursday",
+        "pizza",
+        "before",
+        "tell"
+      ]
     }
-  ],
-  "validation_issues": []
+  ]
 }

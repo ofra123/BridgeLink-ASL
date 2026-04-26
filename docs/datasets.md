@@ -1,118 +1,76 @@
 # Dataset Plan
 
-## Short Answer
+## Final Dataset Choice
 
-Use a two-layer dataset strategy:
+BridgeLink ASL now uses a WLASL-centered dataset strategy:
 
-- Primary sentence dataset: How2Sign
-- Project-owned demo dataset: 8-12 short clips recorded by the team
-- Optional isolated-sign support datasets: WLASL or ASL Citizen
+- Primary training dataset: `WLASL-100`
+- Live demo / comparison subset: `WLASL-25`
+- Optional team-recorded demo clips for presentation backup
 
-Do not rely only on Sign Language MNIST for this project. It is useful for alphabet experiments, but it does not support sentence-level ASL translation.
+This keeps the project aligned with the final scope: isolated sign recognition
+from short video clips, not full continuous ASL translation.
 
-## Recommended Primary Dataset: How2Sign
+## WLASL-100
 
-How2Sign is the selected primary dataset for this project. It is the best match for our new goal because it is a continuous American Sign Language dataset with sentence-level clips, English translations, gloss annotations, and multimodal video/keypoint resources.
-
-Use it for:
-
-- understanding the structure of sentence-level ASL data
-- testing sentence-window metadata
-- comparing our clip schema to a real research dataset
-- selecting a few example clips for offline experiments if storage allows
-- extracting sampled frames for the CNN baseline
-- providing the same test clips for CNN versus VLM comparison
-
-Constraints:
-
-- the full videos are very large
-- the dataset is for research purposes
-- do not commit downloaded videos to Git
-- keep only small metadata samples or derived notes in the repo
-
-Source: https://how2sign.github.io/
-
-## Optional Word-Level Dataset: WLASL
-
-WLASL is useful if the team wants more isolated sign examples for the word-level classifier. It is not enough for sentence translation by itself because it is organized around individual signs.
+WLASL is the main dataset used for model training and benchmarking.
 
 Use it for:
 
-- improving isolated sign recognition
-- expanding beyond the current small vocabulary
-- comparing word-level model behavior
+- CNN training on a real word-level ASL benchmark
+- Transformer extension experiments
+- reporting train / validation / test metrics
+- building the main project story around a reproducible, standard dataset
 
-Constraints:
+Why it fits:
 
-- academic/computational use restrictions apply
-- it is word-level, not sentence-level
-- scraped-video datasets can have availability and consent limitations
+- word-level labels match the project scope
+- the dataset is widely cited in ASL recognition work
+- it supports fair comparison with prior methods
+- it is practical for landmark-based training on free-tier GPU hardware
 
-Source: https://dxli94.github.io/WLASL/
+## WLASL-25
 
-## Optional Isolated-Sign Dataset: ASL Citizen
+WLASL-25 is the smaller evaluation subset used for:
 
-ASL Citizen is a strong isolated-sign dataset because it is crowdsourced, consent-based, and recorded in real-world webcam conditions. It is not designed for continuous signing or sentence translation.
+- the live demo checkpoint
+- the CNN versus VLM reranking comparison
+- faster smoke tests on local machines and Hugging Face Space
 
-Use it for:
+This subset is easier to present because the label space is smaller and the
+predictions are more stable in front of an audience.
 
-- robust isolated-sign recognition
-- real-world lighting/background variety
-- dictionary-style sign lookup experiments
+## Clip Manifest Format
 
-Constraints:
+The current hybrid comparison manifest is:
 
-- it is isolated-sign data, not continuous ASL sentences
-- its own recommended-use page cautions against using it as continuous signing data
-- the full download is large
-
-Source: https://www.microsoft.com/en-us/research/project/asl-citizen/
-
-## Team-Owned Sentence Dataset
-
-For the class demo, we should record our own small controlled sentence dataset. This gives us examples that exactly match our vocabulary and expected presentation flow.
-
-Suggested starter sentences:
-
-- `HELLO WANT DRINK` -> "Hello, I want a drink."
-- `PLEASE HELP` -> "Please help."
-- `THANK_YOU FINISHED` -> "Thank you, I am finished."
-- `WANT MORE` -> "I want more."
-- `NO STOP` -> "No, stop."
-- `YES PLEASE` -> "Yes, please."
-- `HELLO PLEASE HELP` -> "Hello, please help."
-- `EAT MORE` -> "I want more food."
-
-Record each sentence at least 5 times, ideally with more than one teammate signing if possible. Keep raw videos outside Git and commit only metadata.
-
-## Proposed Clip Metadata Format
-
-```json
-{
-  "clip_id": "team_hello_want_drink_001",
-  "split": "test",
-  "source": "team-recorded",
-  "gloss": ["HELLO", "WANT", "DRINK"],
-  "english": "Hello, I want a drink.",
-  "video_path": "data/raw/team_hello_want_drink_001.mp4",
-  "sampled_frames": [],
-  "landmarks_path": null,
-  "notes": "Controlled lighting, front-facing signer."
-}
+```text
+data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
 ```
 
-For CNN training, `sampled_frames` must contain a fixed or pad-able sequence of local frame image paths. The default CNN config expects 16 sampled frames per clip.
+Each row contains:
 
-## How2Sign Subset Workflow
+- `video_id`
+- `true_label`
+- `video_path`
+- `landmark_path`
+- `cnn_top1`
+- `cnn_top5`
+- `vlm_prompt`
 
-Use `scripts/create_how2sign_subset.py` to convert downloaded How2Sign metadata into `data/processed/how2sign_subset.jsonl`.
-
-Use `scripts/prepare_clip_dataset.py --extract-frames` to sample frames into `data/interim/frames/`.
-
-Use `scripts/generate_project_results.py` to create report-ready metrics and SVG charts in `results/`.
-
-Large How2Sign videos and extracted frame folders must stay out of Git.
+This manifest is the handoff point between the trained CNN and the local VLM
+reranking workflow.
 
 ## Storage Rule
 
-Keep large assets out of Git. Store raw video clips in local `data/raw/`, OneDrive, Google Drive, or GitHub Releases if the team needs sharing. Commit only metadata, small samples, and scripts.
+Keep large raw datasets and extracted landmarks outside Git when possible.
+Commit only:
+
+- metadata manifests
+- small evaluation subsets
+- scripts
+- charts
+- final metrics
+
+The tracked repo should stay lightweight enough for grading, collaboration,
+and Hugging Face deployment.
