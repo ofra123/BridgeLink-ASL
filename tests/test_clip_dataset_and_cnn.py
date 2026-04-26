@@ -94,6 +94,7 @@ class ClipDatasetAndCnnTests(unittest.TestCase):
         config = CnnModelConfig(frame_count=12, image_size=128)
         description = describe_cnn_baseline(config, num_classes=4)
 
-        self.assertEqual(description["model_family"], "sampled-frame-clip-cnn")
+        self.assertEqual(description["model_family"], "sentence-3d-cnn")
         self.assertEqual(description["input_shape"], [12, 128, 128, 3])
         self.assertEqual(description["num_classes"], 4)
+        self.assertEqual(description["temporal_strategy"], "Conv3D over sampled RGB clip volumes")

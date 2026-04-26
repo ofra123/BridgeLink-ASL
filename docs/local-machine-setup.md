@@ -146,7 +146,25 @@ Outputs go to:
 presentation/visuals/
 ```
 
-## 9. Run the test suite
+## 9. Optional: train the How2Sign sentence-level 3D CNN
+
+If you need the sentence-video branch for a class comparison, use the
+How2Sign training guide:
+
+```text
+docs/how2sign-sentence-training.md
+```
+
+Quick start:
+
+```powershell
+python scripts\create_how2sign_sentence_manifest.py
+python scripts\prepare_clip_dataset.py --extract-frames --output-manifest data\processed\how2sign_sentences_top12.frames.jsonl
+python -m pip install -e ".[training]"
+train_cnn_model --clips data\processed\how2sign_sentences_top12.frames.jsonl --output models\cnn-3d-sentence.keras
+```
+
+## 10. Run the test suite
 
 ```powershell
 python -m pytest -q
@@ -155,10 +173,10 @@ python -m pytest -q
 At the current tested state, this should pass with:
 
 ```text
-33 passed, 2 warnings
+34 passed, 2 warnings
 ```
 
-## 10. Common troubleshooting
+## 11. Common troubleshooting
 
 ### `mediapipe has no attribute solutions`
 
@@ -194,7 +212,18 @@ python -m pip install torchvision
 That is expected on CPU. The 7B model may offload to CPU/disk and take a long
 time. Keep the VLM for local comparison, not the live Space demo.
 
-## 11. Recommended local demo flow
+### How2Sign sentence training is too heavy
+
+Reduce one or more of:
+
+- `--batch-size` from `2` to `1`
+- `--image-size` from `112` to `96`
+- `--frame-count` from `16` to `12`
+
+Also start with the default top-12 repeated sentence subset before trying to
+expand the class count.
+
+## 12. Recommended local demo flow
 
 1. Activate `.venv`
 2. Set `HF_MODEL_FILENAME=cnn_landmark_wlasl25_best.pt`

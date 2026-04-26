@@ -1,4 +1,4 @@
-"""Optional clip-CNN baseline for comparing against the VLM path."""
+"""Sentence-level 3D CNN baseline for closed-vocabulary video classification."""
 
 from __future__ import annotations
 
@@ -12,18 +12,18 @@ from .clip_dataset import ClipDatasetRecord, load_clip_dataset, summarize_clip_s
 
 @dataclass(frozen=True)
 class CnnModelConfig:
-    """Configuration for the sampled-frame CNN baseline."""
+    """Configuration for the sentence-level 3D CNN baseline."""
 
     frame_count: int = 16
-    image_size: int = 160
+    image_size: int = 112
     channels: int = 3
-    batch_size: int = 4
-    epochs: int = 8
+    batch_size: int = 2
+    epochs: int = 12
     learning_rate: float = 0.001
-    dropout: float = 0.25
-    conv_filters: tuple[int, ...] = (32, 64, 128)
-    model_path: Path = field(default_factory=lambda: Path("models/cnn-baseline.keras"))
-    manifest_path: Path = field(default_factory=lambda: Path("data/processed/sample_sentence_clips.jsonl"))
+    dropout: float = 0.3
+    conv_filters: tuple[int, ...] = (16, 32, 64)
+    model_path: Path = field(default_factory=lambda: Path("models/cnn-3d-sentence.keras"))
+    manifest_path: Path = field(default_factory=lambda: Path("data/processed/how2sign_sentences_top12.jsonl"))
 
     @property
     def input_shape(self) -> tuple[int, int, int, int]:
@@ -32,7 +32,7 @@ class CnnModelConfig:
 
 @dataclass(frozen=True)
 class CnnTrainingPlan:
-    """Dry-run summary for the CNN branch."""
+    """Dry-run summary for the sentence-level CNN branch."""
 
     labels: tuple[str, ...]
     split_distribution: dict[str, int]
@@ -54,7 +54,7 @@ class CnnTrainingPlan:
 
 @dataclass(frozen=True)
 class CnnTrainingSummary:
-    """Result from a real CNN training run."""
+    """Result from a real 3D CNN training run."""
 
     manifest_path: str
     output_path: str
@@ -73,21 +73,21 @@ class CnnTrainingSummary:
 
 
 def describe_cnn_baseline(config: CnnModelConfig, num_classes: int) -> dict[str, Any]:
-    """Describe the CNN architecture without importing TensorFlow."""
+    """Describe the 3D CNN architecture without importing TensorFlow."""
 
     return {
-        "model_family": "sampled-frame-clip-cnn",
-        "comparison_role": "CNN baseline against Qwen2.5-VL sentence mode",
+        "model_family": "sentence-3d-cnn",
+        "comparison_role": "Sentence-level RGB video baseline against VLM sentence interpretation",
         "input_shape": list(config.input_shape),
         "num_classes": num_classes,
-        "temporal_strategy": "shared 2D CNN per sampled frame followed by temporal average pooling",
+        "temporal_strategy": "Conv3D over sampled RGB clip volumes",
         "conv_filters": list(config.conv_filters),
         "dropout": config.dropout,
     }
 
 
 def build_cnn_training_plan(records: Iterable[ClipDatasetRecord], config: CnnModelConfig) -> CnnTrainingPlan:
-    """Build a dry-run training plan from clip metadata."""
+    """Build a dry-run training plan from sentence clip metadata."""
 
     materialized = list(records)
     labels = tuple(sorted({record.label for record in materialized}))
@@ -124,27 +124,31 @@ def select_frame_paths(frame_paths: Iterable[Path], frame_count: int) -> tuple[P
 
 
 def build_clip_cnn_model(num_classes: int, config: CnnModelConfig):
-    """Build and compile the optional TensorFlow/Keras clip CNN."""
+    """Build and compile the TensorFlow/Keras 3D CNN."""
 
     tf = _require_tensorflow()
     if num_classes <= 1:
         raise ValueError("CNN training requires at least two sentence classes.")
 
     inputs = tf.keras.Input(shape=config.input_shape, name="clip_frames")
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Rescaling(1.0 / 255.0), name="rescale_frames")(inputs)
-    for filters in config.conv_filters:
-        x = tf.keras.layers.TimeDistributed(
-            tf.keras.layers.Conv2D(filters, kernel_size=3, padding="same", activation="relu")
+    x = tf.keras.layers.Rescaling(1.0 / 255.0, name="rescale_frames")(inputs)
+    for index, filters in enumerate(config.conv_filters):
+        x = tf.keras.layers.Conv3D(
+            filters,
+            kernel_size=(3, 3, 3),
+            padding="same",
+            activation="relu",
+            name=f"conv3d_{index + 1}",
         )(x)
-        x = tf.keras.layers.TimeDistributed(tf.keras.layers.BatchNormalization())(x)
-        x = tf.keras.layers.TimeDistributed(tf.keras.layers.MaxPooling2D(pool_size=2))(x)
+        x = tf.keras.layers.BatchNormalization(name=f"bn3d_{index + 1}")(x)
+        pool = (1, 2, 2) if index == 0 else (2, 2, 2)
+        x = tf.keras.layers.MaxPooling3D(pool_size=pool, name=f"pool3d_{index + 1}")(x)
 
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.GlobalAveragePooling2D(), name="frame_embeddings")(x)
-    x = tf.keras.layers.GlobalAveragePooling1D(name="temporal_average_pool")(x)
-    x = tf.keras.layers.Dropout(config.dropout)(x)
+    x = tf.keras.layers.GlobalAveragePooling3D(name="clip_embedding")(x)
+    x = tf.keras.layers.Dropout(config.dropout, name="dropout")(x)
     outputs = tf.keras.layers.Dense(num_classes, activation="softmax", name="sentence_class")(x)
 
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="bridgelink_clip_cnn")
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="bridgelink_sentence_3dcnn")
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=config.learning_rate),
         loss="sparse_categorical_crossentropy",
@@ -158,7 +162,7 @@ def train_clip_cnn_model(
     output_path: str | Path | None = None,
     config: CnnModelConfig | None = None,
 ) -> CnnTrainingSummary:
-    """Train the CNN baseline from sampled frame paths in a clip manifest."""
+    """Train the 3D CNN baseline from sampled frame paths in a clip manifest."""
 
     active_config = config or CnnModelConfig()
     manifest = Path(manifest_path).expanduser().resolve()
@@ -238,7 +242,7 @@ def _require_tensorflow():
         import tensorflow as tf  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "TensorFlow is required for CNN training. Install it with "
+            "TensorFlow is required for sentence CNN training. Install it with "
             "`pip install -e .[training]` before running the CNN trainer."
         ) from exc
     return tf
