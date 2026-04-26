@@ -66,6 +66,8 @@ class GestureWindow:
     clip_id: str
     sampled_frames: tuple[Path, ...]
     token_trace: tuple[DetectedGestureToken, ...]
+    video_path: Path | None = None
+    candidate_labels: tuple[str, ...] = field(default_factory=tuple)
     expected_gloss: tuple[str, ...] = field(default_factory=tuple)
     expected_text: str = ""
     source: str = "manifest"

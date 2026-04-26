@@ -107,9 +107,17 @@ over clip manifests:
 run_wrapper --mode compare --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
 ```
 
-Today this wrapper is a scaffold around the existing CNN/VLM project. The mock
-interpreter works offline for testing; the local Qwen path is still a
-placeholder contract.
+The mock interpreter still works offline for testing, and the local Qwen path
+now loads lazily when the optional VLM extras are installed:
+
+```bash
+pip install -e ".[vlm]"
+run_wrapper --mode compare --vlm-provider local --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
+```
+
+The wrapper accepts both the older `clip_id`/`gloss` sentence manifests and the
+current hybrid WLASL eval manifests with `video_id`, `true_label`, and
+`cnn_top5`.
 
 ## Repo Layout
 

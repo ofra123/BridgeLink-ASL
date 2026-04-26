@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 
-from bridgelink_asl.asl_types import SentenceEvent
-from bridgelink_asl.wrapper import run_wrapper
+from bridgelink_asl.clip_dataset import load_clip_dataset
+from bridgelink_asl.asl_types import GestureWindow, SentenceEvent
+from bridgelink_asl.wrapper import LocalQwen25VlmInterpreter, run_wrapper
 
 
 def test_compare_mode_logs_cnn_and_vlm_predictions(tmp_path) -> None:
@@ -103,3 +104,67 @@ def test_cnn_mode_only_writes_cnn_fields(tmp_path) -> None:
     assert row["vlm_prediction"] is None
     assert isinstance(row["token_trace"], list)
     assert row["failure_notes"] == []
+
+
+def test_load_clip_dataset_accepts_hybrid_eval_rows_and_resolves_local_clip(tmp_path) -> None:
+    clips_dir = tmp_path / "clips"
+    clips_dir.mkdir()
+    local_clip = clips_dir / "12320_computer.mp4"
+    local_clip.write_bytes(b"fake")
+    manifest_path = tmp_path / "hybrid.jsonl"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "candidate_model": "landmark_cnn",
+                "video_id": "12320",
+                "true_label": "computer",
+                "video_path": "/content/drive/MyDrive/BridgeLink-ASL/vlm_eval_wlasl25_cnn/clips/12320_computer.mp4",
+                "cnn_top1": "computer",
+                "cnn_top5": [
+                    {"label": "computer", "confidence": 0.19},
+                    {"label": "snow", "confidence": 0.08},
+                ],
+                "vlm_prompt": "Choose the best label from the list only.",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = load_clip_dataset(manifest_path)
+
+    assert len(records) == 1
+    assert records[0].clip_id == "12320"
+    assert records[0].split == "test"
+    assert records[0].gloss == ("COMPUTER",)
+    assert records[0].candidate_labels == ("COMPUTER", "SNOW")
+    assert records[0].video_path == local_clip.resolve()
+
+
+def test_local_qwen_interpreter_parses_json_response_without_real_model() -> None:
+    class FakeInterpreter(LocalQwen25VlmInterpreter):
+        def _generate_response_text(self, messages):
+            return json.dumps(
+                {
+                    "gloss": ["computer"],
+                    "sentence": "Computer.",
+                    "confidence": 0.88,
+                    "needs_clarification": False,
+                }
+            )
+
+    interpreter = FakeInterpreter(model_id="Qwen/Qwen2.5-VL-7B-Instruct")
+    event = interpreter.interpret(
+        GestureWindow(
+            clip_id="demo",
+            sampled_frames=(),
+            token_trace=(),
+            video_path=None,
+            candidate_labels=("COMPUTER", "SNOW"),
+        )
+    )
+
+    assert event.gloss == ("COMPUTER",)
+    assert event.sentence == "Computer."
+    assert event.model_mode == "vlm"
+    assert event.confidence == 0.88
