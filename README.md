@@ -21,16 +21,21 @@ The Gradio app supports two modes:
 - **Upload / Record Clip** — upload or record a 2–5 second clip, get top-5
   predictions with confidence scores.
 
+For a full local setup guide, see
+[`docs/local-machine-setup.md`](docs/local-machine-setup.md).
+
 ### Run locally
 
 ```bash
-python -m venv .venv
+py -3.11 -m venv .venv
 # Windows
 .venv\Scripts\Activate.ps1
 # macOS / Linux
 source .venv/bin/activate
 
 pip install -r requirements.txt
+python -m pip install -e .
+set HF_MODEL_FILENAME=cnn_landmark_wlasl25_best.pt
 python app.py
 ```
 
