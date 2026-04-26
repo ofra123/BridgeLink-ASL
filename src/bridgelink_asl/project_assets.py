@@ -13,17 +13,16 @@ from .metrics import ClassificationMetrics, compute_classification_metrics
 
 
 def build_dataset_summary(records: Iterable[ClipDatasetRecord]) -> dict[str, Any]:
-    """Summarize the current clip dataset for report assets."""
+    """Summarize the current WLASL evaluation subset for report assets."""
 
     materialized = list(records)
-    dataset_name = _infer_dataset_name(materialized)
     split_counts = Counter(record.split for record in materialized)
     class_counts = Counter(_canonical_label(record.label) for record in materialized)
     source_counts = Counter(record.source for record in materialized)
     candidate_counts = [len(record.candidate_labels) for record in materialized]
 
     return {
-        "dataset": dataset_name,
+        "dataset": "WLASL-25 hybrid evaluation subset",
         "total_clips": len(materialized),
         "num_classes": len(class_counts),
         "split_counts": dict(sorted(split_counts.items())),
@@ -56,7 +55,6 @@ def build_comparison_results(
     """Build CNN-versus-VLM comparison rows from the hybrid WLASL evaluation set."""
 
     materialized = list(records)
-    dataset_name = _infer_dataset_name(materialized)
     expected: list[str] = []
     cnn_predictions: list[str] = []
     vlm_predictions: list[str] = []
@@ -107,7 +105,7 @@ def build_comparison_results(
         "rows": rows,
         "comparison_chart_svg": make_model_comparison_svg(cnn_metrics, vlm_metrics),
         "class_distribution_svg": make_bar_chart_svg(
-            f"{dataset_name} class distribution",
+            "WLASL-25 evaluation class distribution",
             Counter(_canonical_label(record.label) for record in materialized),
         ),
         "split_distribution_svg": make_bar_chart_svg(
@@ -300,16 +298,3 @@ def _top_labels_by_support(metrics: ClassificationMetrics, *, limit: int) -> lis
 
 def _canonical_label(value: str) -> str:
     return str(value).strip().lower().replace("_", " ")
-
-
-def _infer_dataset_name(records: Iterable[ClipDatasetRecord]) -> str:
-    source_counts = Counter(record.source for record in records)
-    if not source_counts:
-        return "BridgeLink ASL clip dataset"
-    if set(source_counts) == {"how2sign-realigned"}:
-        return "How2Sign repeated-sentence subset"
-    if "how2sign-realigned" in source_counts:
-        return "BridgeLink ASL mixed clip dataset"
-    if any(source.startswith("wlasl") or source == "landmark_cnn" for source in source_counts):
-        return "WLASL-25 hybrid evaluation subset"
-    return "BridgeLink ASL clip dataset"

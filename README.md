@@ -78,29 +78,6 @@ The training notebook is at `notebooks/train_wlasl100_colab.ipynb`. It runs on
 Google Colab (free T4 GPU), trains the required landmark CNN, optionally trains
 the Transformer extension, and saves all outputs to Google Drive.
 
-## Sentence-Level 3D CNN Extension
-
-The repo also includes a **How2Sign sentence-classification branch** for teams
-that need a video-native CNN baseline over full sentence clips rather than
-isolated signs.
-
-That path uses:
-
-- **How2Sign frontal RGB clips**
-- **manually re-aligned English translations**
-- a **closed-vocabulary 3D CNN** trained on repeated sentence classes
-
-The full workflow is documented in
-[`docs/how2sign-sentence-training.md`](docs/how2sign-sentence-training.md).
-In short:
-
-```bash
-python scripts/create_how2sign_sentence_manifest.py
-python scripts/prepare_clip_dataset.py --extract-frames
-pip install -e ".[training]"
-train_cnn_model --clips data/processed/how2sign_sentences_top12.frames.jsonl
-```
-
 ## Hybrid VLM Evaluation
 
 After the notebook creates

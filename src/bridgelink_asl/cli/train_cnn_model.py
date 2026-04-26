@@ -1,4 +1,4 @@
-"""CLI for the sentence-level 3D CNN baseline."""
+"""CLI for the optional sampled-frame CNN baseline."""
 
 from __future__ import annotations
 
@@ -12,14 +12,14 @@ from ..config import load_config
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Train or dry-run the BridgeLink ASL sentence-level 3D CNN baseline.")
+    parser = argparse.ArgumentParser(description="Train or dry-run the BridgeLink ASL clip CNN baseline.")
     parser.add_argument("--config", help="Optional JSON config file.")
     parser.add_argument("--clips", help="Path to a sentence clip JSONL manifest.")
     parser.add_argument("--output", help="Where to save the trained CNN model.")
     parser.add_argument("--epochs", type=int, help="Training epochs.")
     parser.add_argument("--batch-size", type=int, help="Training batch size.")
-    parser.add_argument("--frame-count", type=int, help="Number of sampled frames per clip volume.")
-    parser.add_argument("--image-size", type=int, help="Square image size for 3D CNN training frames.")
+    parser.add_argument("--frame-count", type=int, help="Number of sampled frames per clip.")
+    parser.add_argument("--image-size", type=int, help="Square image size for sampled frames.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and print the CNN plan without TensorFlow.")
     return parser
 

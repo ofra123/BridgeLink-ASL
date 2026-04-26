@@ -28,7 +28,6 @@ dependencies = [
 [project.optional-dependencies]
 speech = ["pyttsx3>=2.90"]
 cloud = ["elevenlabs>=1.7.0"]
-training = ["tensorflow>=2.16,<2.20"]
 vlm = [
   "transformers>=4.51,<5",
   "accelerate>=0.30",

@@ -49,17 +49,17 @@ class AppConfig:
     transcript_path: Path = field(default_factory=lambda: Path("outputs/demo-transcript.jsonl"))
     metrics_path: Path = field(default_factory=lambda: Path("outputs/eval-metrics.json"))
     dataset_path: Path = field(default_factory=lambda: Path("data/processed/sample_landmarks.jsonl"))
-    clip_manifest_path: Path = field(default_factory=lambda: Path("data/processed/how2sign_sentences_top12.jsonl"))
+    clip_manifest_path: Path = field(default_factory=lambda: Path("data/processed/sample_sentence_clips.jsonl"))
     max_frames: int = 18
     frame_interval_seconds: float = 0.0
     use_camera: bool = True
     demo_sequence: tuple[str, ...] = field(default_factory=lambda: DEFAULT_DEMO_SEQUENCE)
     model_mode: str = "word"
-    cnn_model_path: Path = field(default_factory=lambda: Path("models/cnn-3d-sentence.keras"))
+    cnn_model_path: Path = field(default_factory=lambda: Path("models/cnn-baseline.keras"))
     cnn_frame_count: int = 16
-    cnn_image_size: int = 112
-    cnn_batch_size: int = 2
-    cnn_epochs: int = 12
+    cnn_image_size: int = 160
+    cnn_batch_size: int = 4
+    cnn_epochs: int = 8
     vlm_provider: str = "mock"
     vlm_model_id: str = "Qwen/Qwen2.5-VL-32B-Instruct-AWQ"
     elevenlabs_api_key: str | None = None

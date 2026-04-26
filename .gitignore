@@ -24,7 +24,6 @@ Thumbs.db
 # Data — do NOT commit video files or large datasets
 data/raw/
 data/processed/
-data/interim/
 *.mp4
 *.avi
 *.mov
