@@ -59,7 +59,7 @@ For the landmark live demo, set:
 For the How2Sign sentence tab, set:
 
 - `HF_SENTENCE_MODEL_REPO` to a HF model repo containing
-  `cnn-3d-sentence-top25.keras`
+  `cnn-3d-sentence-top25-normalized.keras`
 - optionally `HF_SENTENCE_MODEL_FILENAME` if you publish the sentence model
   under a different filename
 
@@ -154,8 +154,8 @@ src/bridgelink_asl/
 models/
   cnn_landmark_best.pt          Primary CNN weights (download from Drive after training)
   cnn_landmark_wlasl25_best.pt  Smaller live-demo CNN weights
-  cnn-3d-sentence-top25.keras   How2Sign repeated-sentence 3D CNN weights
-  cnn-3d-sentence-top25.labels.json
+  cnn-3d-sentence-top25-normalized.keras   Best How2Sign repeated-sentence 3D CNN weights
+  cnn-3d-sentence-top25-normalized.labels.json
   sign_transformer_best.pt      Optional Transformer weights
   labels.json                   Label map
 results/

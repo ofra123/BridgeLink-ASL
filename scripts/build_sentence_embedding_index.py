@@ -19,12 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Build a 3D CNN sentence embedding index.")
     parser.add_argument(
         "--manifest",
-        default="data/processed/how2sign_sentences_top25.frames.jsonl",
+        default="data/processed/how2sign_sentences_top25.normalized.frames.jsonl",
         help="Clip manifest JSONL with sampled_frames.",
     )
     parser.add_argument(
         "--model",
-        default="models/cnn-3d-sentence-top25.keras",
+        default="models/cnn-3d-sentence-top25-normalized.keras",
         help="Path to the trained Keras sentence CNN.",
     )
     parser.add_argument(

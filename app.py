@@ -47,7 +47,7 @@ MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
 MODEL_FILENAME = os.environ.get("HF_MODEL_FILENAME", "cnn_landmark_wlasl25_best.pt").strip()
 LOCAL_WEIGHTS = PROJECT_ROOT / "models" / MODEL_FILENAME
 SENTENCE_MODEL_REPO = os.environ.get("HF_SENTENCE_MODEL_REPO", "").strip()
-SENTENCE_MODEL_FILENAME = os.environ.get("HF_SENTENCE_MODEL_FILENAME", "cnn-3d-sentence-top25.keras").strip()
+SENTENCE_MODEL_FILENAME = os.environ.get("HF_SENTENCE_MODEL_FILENAME", "cnn-3d-sentence-top25-normalized.keras").strip()
 LOCAL_SENTENCE_WEIGHTS = PROJECT_ROOT / "models" / SENTENCE_MODEL_FILENAME
 SEQ_LEN = 32
 STRIDE = 4                     # run inference every STRIDE frames
@@ -98,7 +98,7 @@ def _require_sentence_runtime() -> SentenceClipRuntime:
         raise gr.Error(
             "How2Sign sentence CNN weights are not available on this Space. "
             "Set HF_SENTENCE_MODEL_REPO or upload "
-            "models/cnn-3d-sentence-top25.keras and its labels file to the repo."
+            "models/cnn-3d-sentence-top25-normalized.keras and its labels file to the repo."
         )
     return SENTENCE_RUNTIME
 
