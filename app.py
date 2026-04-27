@@ -54,6 +54,8 @@ STRIDE = 4                     # run inference every STRIDE frames
 MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_MIN_CONFIDENCE", "0.55"))
 SENTENCE_MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_SENTENCE_MIN_CONFIDENCE", "0.55"))
 STABILITY_K = 2                # require K consecutive same predictions before emitting
+SENTENCE_STREAM_STRIDE = int(os.environ.get("BRIDGELINK_SENTENCE_STREAM_STRIDE", "2"))
+SENTENCE_STABILITY_K = int(os.environ.get("BRIDGELINK_SENTENCE_STABILITY_K", "2"))
 
 RUNTIME: SignLanguageRuntime | None = None
 RUNTIME_ERROR: str | None = None
@@ -108,8 +110,10 @@ def _require_sentence_runtime() -> SentenceClipRuntime:
 # ---------------------------------------------------------------------------
 
 def init_live_state() -> dict[str, Any]:
+    sentence_window = SENTENCE_RUNTIME.frame_count if SENTENCE_RUNTIME is not None else 16
     return {
         "buffer": deque(maxlen=SEQ_LEN),
+        "sentence_buffer": deque(maxlen=sentence_window),
         "frame_idx": 0,
         "last_label": None,
         "candidate_label": None,
@@ -119,6 +123,14 @@ def init_live_state() -> dict[str, Any]:
         "caption": "",
         "history": [],
         "last_inference_ms": 0.0,
+        "sentence_last_label": None,
+        "sentence_candidate_label": None,
+        "sentence_candidate_confidence": None,
+        "sentence_candidate_top5": [],
+        "sentence_stable_count": 0,
+        "sentence_caption": "",
+        "sentence_history": [],
+        "sentence_last_inference_ms": 0.0,
     }
 
 
@@ -127,7 +139,7 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
     if state is None:
         state = init_live_state()
     if frame is None:
-        return None, _status_markdown(state), state
+        return None, _status_markdown(state), _sentence_status_markdown(state), state
 
     runtime = _require_runtime()
 
@@ -135,6 +147,7 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
     lm, tracking_result = process_frame_for_landmarks(frame)
     state["buffer"].append(lm)
     state["frame_idx"] += 1
+    _update_sentence_live_state(frame, state)
 
     # Only run the model every STRIDE frames, and only once the buffer is full.
     if (
@@ -177,7 +190,56 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
         top5=state.get("candidate_top5"),
         buffer_size=len(state["buffer"]),
     )
-    return tracking_overlay, _status_markdown(state), state
+    return tracking_overlay, _status_markdown(state), _sentence_status_markdown(state), state
+
+
+def _update_sentence_live_state(frame: np.ndarray, state: dict[str, Any]) -> None:
+    if SENTENCE_RUNTIME is None:
+        return
+
+    import cv2
+
+    resized = cv2.resize(
+        frame,
+        (SENTENCE_RUNTIME.image_size, SENTENCE_RUNTIME.image_size),
+        interpolation=cv2.INTER_AREA,
+    ).astype(np.float32)
+    state["sentence_buffer"].append(resized)
+
+    if (
+        len(state["sentence_buffer"]) != SENTENCE_RUNTIME.frame_count
+        or state["frame_idx"] % SENTENCE_STREAM_STRIDE != 0
+    ):
+        return
+
+    clip_volume = np.stack(list(state["sentence_buffer"]), axis=0)
+    t0 = time.perf_counter()
+    label, confidence, top5 = SENTENCE_RUNTIME.predict_clip(clip_volume)
+    state["sentence_last_inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+    state["sentence_candidate_confidence"] = confidence
+
+    if confidence < SENTENCE_MIN_CONFIDENCE:
+        state["sentence_candidate_label"] = None
+        state["sentence_candidate_top5"] = []
+        state["sentence_stable_count"] = 0
+        return
+
+    state["sentence_candidate_label"] = label
+    state["sentence_candidate_top5"] = top5
+    if label == state["sentence_last_label"]:
+        state["sentence_stable_count"] += 1
+    else:
+        state["sentence_last_label"] = label
+        state["sentence_stable_count"] = 1
+
+    if state["sentence_stable_count"] < SENTENCE_STABILITY_K:
+        return
+
+    last_emitted = state["sentence_history"][-1] if state["sentence_history"] else None
+    if label != last_emitted:
+        state["sentence_history"].append(label)
+        state["sentence_history"] = state["sentence_history"][-4:]
+    state["sentence_caption"] = label
 
 
 def _format_caption(history: list[str]) -> str:
@@ -227,9 +289,30 @@ def _status_markdown(state: dict[str, Any]) -> str:
     )
 
 
-def reset_live() -> tuple[dict[str, Any], str]:
+def _sentence_status_markdown(state: dict[str, Any]) -> str:
+    if SENTENCE_RUNTIME is None:
+        return "### Sentence Watch\n\n_How2Sign sentence CNN is not loaded on this Space._"
+
+    caption = state.get("sentence_caption") or "_Waiting for a confident sentence..._"
+    last_label = state.get("sentence_candidate_label") or "Waiting"
+    confidence = state.get("sentence_candidate_confidence")
+    confidence_text = f"{confidence:.1%}" if confidence is not None else "--"
+    infer = state.get("sentence_last_inference_ms", 0.0)
+    buf = len(state["sentence_buffer"]) if state.get("sentence_buffer") is not None else 0
+    return (
+        f"### Sentence Watch\n\n{caption}\n\n"
+        "- Closed vocabulary: **How2Sign repeated sentences**\n"
+        f"- Current sentence: **{last_label}**\n"
+        f"- Confidence gate: **{SENTENCE_MIN_CONFIDENCE:.0%}**\n"
+        f"- Latest confidence: **{confidence_text}**\n"
+        f"- Buffer: {buf}/{SENTENCE_RUNTIME.frame_count} frames\n"
+        f"- Last inference: {infer} ms"
+    )
+
+
+def reset_live() -> tuple[dict[str, Any], str, str]:
     state = init_live_state()
-    return state, _status_markdown(state)
+    return state, _status_markdown(state), _sentence_status_markdown(state)
 
 
 # ---------------------------------------------------------------------------
@@ -442,8 +525,9 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
 
     with gr.Tab("Live Webcam"):
         gr.Markdown(
-            "Stream your webcam. The model runs on a rolling 32-frame window "
-            "and emits a sign when it is confident and stable. "
+            "Stream your webcam to run both live models at once. "
+            "The landmark CNN drives the fast sign caption, while the How2Sign "
+            "sentence CNN watches the RGB clip buffer for a confident repeated-sentence match. "
             "For best results: good lighting, plain background, upper body in frame."
         )
         live_state = gr.State(init_live_state())
@@ -462,15 +546,16 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
                 )
             with gr.Column(scale=1):
                 live_status = gr.Markdown(_status_markdown(init_live_state()))
+                sentence_live_status = gr.Markdown(_sentence_status_markdown(init_live_state()))
                 reset_btn = gr.Button("Reset caption")
         webcam.stream(
             on_live_frame,
             inputs=[webcam, live_state],
-            outputs=[tracking_view, live_status, live_state],
+            outputs=[tracking_view, live_status, sentence_live_status, live_state],
             show_progress="hidden",
             stream_every=0.2,
         )
-        reset_btn.click(reset_live, outputs=[live_state, live_status])
+        reset_btn.click(reset_live, outputs=[live_state, live_status, sentence_live_status])
 
     with gr.Tab("Upload / Record Clip"):
         gr.Markdown(
