@@ -56,14 +56,22 @@ def _extract_frames_to_manifest(
     except ImportError as exc:
         raise RuntimeError("OpenCV is required for frame extraction. Install opencv-python-headless.") from exc
 
+    manifest_path = manifest_path.expanduser().resolve()
+    output_manifest = output_manifest.expanduser().resolve()
+    frame_root = frame_root.expanduser().resolve()
+
     updated_rows: list[dict[str, object]] = []
     for payload in _read_jsonl(manifest_path):
         clip_id = str(payload["clip_id"])
-        video_path = Path(str(payload.get("video_path", "")))
+        video_path = Path(str(payload.get("video_path", ""))).expanduser()
+        if not video_path.is_absolute():
+            video_path = (manifest_path.parent / video_path).resolve()
+        else:
+            video_path = video_path.resolve()
         if video_path.exists():
             clip_frame_dir = frame_root / clip_id
             sampled = _sample_video_frames(cv2, video_path, clip_frame_dir, frame_count)
-            payload["sampled_frames"] = [str(path).replace("\\", "/") for path in sampled]
+            payload["sampled_frames"] = [path.resolve().as_posix() for path in sampled]
             payload["notes"] = str(payload.get("notes", "")).strip() + " Sampled frames extracted."
         else:
             payload["notes"] = str(payload.get("notes", "")).strip() + " Video file missing during extraction."

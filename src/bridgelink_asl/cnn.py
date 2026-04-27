@@ -18,10 +18,13 @@ class CnnModelConfig:
     image_size: int = 112
     channels: int = 3
     batch_size: int = 2
-    epochs: int = 12
-    learning_rate: float = 0.001
-    dropout: float = 0.3
+    epochs: int = 20
+    learning_rate: float = 0.0003
+    dropout: float = 0.4
     conv_filters: tuple[int, ...] = (16, 32, 64)
+    early_stopping_patience: int = 5
+    reduce_lr_patience: int = 2
+    min_learning_rate: float = 1e-5
     model_path: Path = field(default_factory=lambda: Path("models/cnn-3d-sentence.keras"))
     manifest_path: Path = field(default_factory=lambda: Path("data/processed/how2sign_sentences_top12.jsonl"))
 
@@ -61,6 +64,10 @@ class CnnTrainingSummary:
     labels: tuple[str, ...]
     epochs: int
     split_distribution: dict[str, int]
+    best_epoch: int | None = None
+    best_val_accuracy: float | None = None
+    test_loss: float | None = None
+    test_accuracy: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +76,10 @@ class CnnTrainingSummary:
             "labels": list(self.labels),
             "epochs": self.epochs,
             "split_distribution": self.split_distribution,
+            "best_epoch": self.best_epoch,
+            "best_val_accuracy": self.best_val_accuracy,
+            "test_loss": self.test_loss,
+            "test_accuracy": self.test_accuracy,
         }
 
 
@@ -82,6 +93,7 @@ def describe_cnn_baseline(config: CnnModelConfig, num_classes: int) -> dict[str,
         "num_classes": num_classes,
         "temporal_strategy": "Conv3D over sampled RGB clip volumes",
         "conv_filters": list(config.conv_filters),
+        "learning_rate": config.learning_rate,
         "dropout": config.dropout,
     }
 
@@ -181,17 +193,45 @@ def train_clip_cnn_model(
     label_to_index = {label: index for index, label in enumerate(plan.labels)}
     train_records = [record for record in records if record.split == "train"]
     val_records = [record for record in records if record.split == "val"]
+    test_records = [record for record in records if record.split == "test"]
 
     model = build_clip_cnn_model(num_classes=len(plan.labels), config=active_config)
+    save_path = Path(output_path or active_config.model_path).expanduser().resolve()
+    best_weights_path = save_path.with_name(f"{save_path.stem}.best.weights.h5")
     train_dataset = _build_tf_dataset(tf, train_records, label_to_index, active_config, shuffle=True)
     val_dataset = _build_tf_dataset(tf, val_records, label_to_index, active_config, shuffle=False) if val_records else None
-    model.fit(train_dataset, validation_data=val_dataset, epochs=active_config.epochs)
+    test_dataset = _build_tf_dataset(tf, test_records, label_to_index, active_config, shuffle=False) if test_records else None
+    history = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        epochs=active_config.epochs,
+        callbacks=_build_training_callbacks(tf, active_config, best_weights_path, monitor_validation=val_dataset is not None),
+        verbose=1,
+    )
+    if best_weights_path.exists():
+        model.load_weights(best_weights_path)
+        best_weights_path.unlink()
 
-    save_path = Path(output_path or active_config.model_path).expanduser().resolve()
     save_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(save_path)
     label_path = save_path.with_suffix(".labels.json")
     label_path.write_text(json.dumps({"labels": list(plan.labels)}, indent=2), encoding="utf-8")
+
+    val_history = history.history.get("val_accuracy", [])
+    best_epoch = None
+    best_val_accuracy = None
+    if val_history:
+        best_epoch = max(range(len(val_history)), key=val_history.__getitem__) + 1
+        best_val_accuracy = float(val_history[best_epoch - 1])
+
+    test_loss = None
+    test_accuracy = None
+    if test_dataset is not None:
+        test_metrics = model.evaluate(test_dataset, verbose=0)
+        if test_metrics:
+            test_loss = float(test_metrics[0])
+        if len(test_metrics) > 1:
+            test_accuracy = float(test_metrics[1])
 
     return CnnTrainingSummary(
         manifest_path=str(manifest),
@@ -199,6 +239,10 @@ def train_clip_cnn_model(
         labels=plan.labels,
         epochs=active_config.epochs,
         split_distribution=plan.split_distribution,
+        best_epoch=best_epoch,
+        best_val_accuracy=best_val_accuracy,
+        test_loss=test_loss,
+        test_accuracy=test_accuracy,
     )
 
 
@@ -227,7 +271,50 @@ def _build_tf_dataset(
         )
         return images, label
 
-    return dataset.map(load_clip).batch(config.batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset.map(load_clip, num_parallel_calls=tf.data.AUTOTUNE).batch(config.batch_size).prefetch(tf.data.AUTOTUNE)
+
+
+def _build_training_callbacks(
+    tf: Any,
+    config: CnnModelConfig,
+    best_weights_path: Path,
+    *,
+    monitor_validation: bool,
+) -> list[Any]:
+    callbacks: list[Any] = []
+    if not monitor_validation:
+        return callbacks
+
+    callbacks.append(
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(best_weights_path),
+            monitor="val_accuracy",
+            mode="max",
+            save_best_only=True,
+            save_weights_only=True,
+            verbose=0,
+        )
+    )
+    callbacks.append(
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy",
+            mode="max",
+            patience=config.early_stopping_patience,
+            restore_best_weights=True,
+            verbose=0,
+        )
+    )
+    callbacks.append(
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss",
+            mode="min",
+            factor=0.5,
+            patience=config.reduce_lr_patience,
+            min_lr=config.min_learning_rate,
+            verbose=0,
+        )
+    )
+    return callbacks
 
 
 def _load_image(tf: Any, path: Any, config: CnnModelConfig):

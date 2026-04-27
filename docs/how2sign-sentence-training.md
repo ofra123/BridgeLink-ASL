@@ -54,6 +54,25 @@ python scripts\create_how2sign_sentence_manifest.py `
 
 This creates a JSONL manifest of repeated sentences only.
 
+Important:
+
+- The default `top12` setup is intentionally small and usually lands around a
+  few hundred clips, not the full raw How2Sign download.
+- Training time is driven by the filtered manifest, not the size of the
+  original `raw_videos` folder.
+- If you want a larger closed-vocabulary run, widen the manifest first, for
+  example:
+
+```powershell
+python scripts\create_how2sign_sentence_manifest.py `
+  --translation-dir data\raw\how2sign\translations `
+  --clip-dir data\raw\how2sign\clips\raw_videos `
+  --output data\processed\how2sign_sentences_top25.jsonl `
+  --min-count 8 `
+  --max-classes 25 `
+  --max-samples-per-class 60
+```
+
 ## 2. Extract sampled frames from each clip
 
 Run:

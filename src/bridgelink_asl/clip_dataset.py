@@ -188,15 +188,19 @@ def _resolve_media_path(value: Any, manifest_dir: Path, fallback_subdir: str | N
     if not text:
         return None
 
-    candidate = Path(text)
-    if not candidate.is_absolute():
-        candidate = (manifest_dir / candidate).resolve()
+    raw_candidate = Path(text).expanduser()
+    if raw_candidate.is_absolute():
+        candidate = raw_candidate.resolve()
         if candidate.exists():
             return candidate
-    elif candidate.exists():
-        return candidate
+    else:
+        for root in (manifest_dir, *manifest_dir.parents):
+            candidate = (root / raw_candidate).resolve()
+            if candidate.exists():
+                return candidate
+        candidate = (manifest_dir / raw_candidate).resolve()
 
-    basename = Path(text).name
+    basename = raw_candidate.name
     search_roots = [manifest_dir]
     if fallback_subdir:
         search_roots.insert(0, manifest_dir / fallback_subdir)
@@ -205,7 +209,7 @@ def _resolve_media_path(value: Any, manifest_dir: Path, fallback_subdir: str | N
         if alternate.exists():
             return alternate
 
-    return candidate if candidate.is_absolute() else (manifest_dir / Path(text)).resolve()
+    return candidate
 
 
 def _optional_string(value: Any) -> str | None:
