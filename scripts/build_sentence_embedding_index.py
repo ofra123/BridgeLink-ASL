@@ -34,9 +34,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--split",
-        default="train",
-        choices=("train", "val", "test"),
-        help="Which manifest split to index.",
+        default="all",
+        choices=("all", "train", "val", "test"),
+        help="Which manifest split to index. Use 'all' for the full support set.",
     )
     parser.add_argument(
         "--top-k",
@@ -79,7 +79,9 @@ def main() -> None:
     if runtime.embedding_model is None:
         raise RuntimeError("The sentence model does not expose a clip_embedding layer.")
 
-    records = [record for record in load_clip_dataset(manifest_path) if record.split == args.split]
+    records = load_clip_dataset(manifest_path)
+    if args.split != "all":
+        records = [record for record in records if record.split == args.split]
     if not records:
         raise RuntimeError(f"No records found for split={args.split!r} in {manifest_path}.")
 
@@ -117,6 +119,7 @@ def main() -> None:
         labels=np.asarray(labels, dtype="<U128"),
         clip_ids=np.asarray(clip_ids, dtype="<U128"),
         source_manifest=np.asarray(str(manifest_path), dtype="<U512"),
+        support_split=np.asarray(args.split, dtype="<U32"),
         top_k=np.asarray(args.top_k, dtype=np.int32),
         candidate_pool=np.asarray(args.candidate_pool, dtype=np.int32),
     )

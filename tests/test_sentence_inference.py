@@ -99,6 +99,7 @@ def test_load_sentence_runtime_loads_embedding_index(tmp_path: Path) -> None:
         labels=np.array(["Hello!", "Thank you."], dtype="<U32"),
         clip_ids=np.array(["clip_a", "clip_b"], dtype="<U32"),
         source_manifest=np.array(str(tmp_path / "manifest.jsonl"), dtype="<U256"),
+        support_split=np.array("all", dtype="<U16"),
         top_k=np.array(3, dtype=np.int32),
         candidate_pool=np.array(10, dtype=np.int32),
     )
@@ -122,6 +123,7 @@ def test_load_sentence_runtime_loads_embedding_index(tmp_path: Path) -> None:
     assert runtime.embedding_model is fake_embedding_model
     assert runtime.embedding_index is not None
     assert runtime.embedding_index.index_path == str(index_path)
+    assert runtime.embedding_index.support_split == "all"
     assert runtime.inference_mode == "embedding_knn"
 
 
