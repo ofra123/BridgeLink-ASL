@@ -8,10 +8,11 @@ import app
 
 
 def test_reset_live_returns_state_and_status() -> None:
-    state, status = app.reset_live()
+    state, sign_status, sentence_status = app.reset_live()
 
     assert "buffer" in state
-    assert "Caption" in status
+    assert "Caption" in sign_status
+    assert "Sentence Watch" in sentence_status
 
 
 def test_classify_sentence_clip_uses_retrieval_mode(monkeypatch) -> None:
@@ -51,5 +52,7 @@ def test_classify_sentence_clip_uses_retrieval_mode(monkeypatch) -> None:
     assert "Thank you." in markdown
     assert "Inference mode: embedding_knn" in markdown
     assert "Support set: all" in markdown
+    assert "Top Sentence Matches" not in markdown
     assert details["accepted_label"] == "Thank you."
     assert details["sentence_inference_mode"] == "embedding_knn"
+    assert "top5" not in details

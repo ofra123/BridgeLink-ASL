@@ -314,17 +314,17 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
     retrieval_mode = runtime.embedding_model is not None and runtime.embedding_index is not None
     retrieval_meta: dict[str, Any] = {}
     if retrieval_mode:
-        label, confidence, top5, retrieval_meta = runtime.predict_clip_retrieval(clip_volume)
+        label, confidence, _, retrieval_meta = runtime.predict_clip_retrieval(clip_volume)
     else:
-        label, confidence, top5 = runtime.predict_clip(clip_volume)
+        label, confidence, _ = runtime.predict_clip(clip_volume)
     infer_ms = round((time.perf_counter() - t0) * 1000, 1)
 
     if retrieval_mode:
+        support_split = getattr(runtime.embedding_index, "support_split", None) if runtime.embedding_index is not None else None
         details = {
             "raw_label": label,
             "accepted_label": label,
             "match_similarity": confidence,
-            "top5": [{"label": name, "score": score} for name, score in top5],
             "extract_ms": extract_ms,
             "inference_ms": infer_ms,
             "clip_shape": list(clip_volume.shape),
@@ -332,19 +332,17 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
             "image_size": runtime.image_size,
             "runtime_model_path": runtime.model_path,
             "sentence_inference_mode": runtime.inference_mode,
+            "index_path": getattr(runtime.embedding_index, "index_path", None),
+            "source_manifest": retrieval_meta.get("source_manifest"),
+            "support_split": support_split,
             **clip_meta,
-            **retrieval_meta,
         }
         lines = [
             "## Best Sentence Match",
             "",
             f"# {label}",
             f"Nearest support-clip similarity: **{confidence:.3f}**",
-            "",
-            "### Top Sentence Matches",
         ]
-        for index, (name, score) in enumerate(top5, start=1):
-            lines.append(f"{index}. {name} - similarity {score:.3f}")
         lines += [
             "",
             f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
@@ -354,7 +352,6 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         ]
         if runtime.embedding_index is not None and runtime.embedding_index.index_path:
             lines.append(f"Index path: {runtime.embedding_index.index_path}")
-        support_split = getattr(runtime.embedding_index, "support_split", None) if runtime.embedding_index is not None else None
         if support_split:
             lines.append(f"Support set: {support_split}")
         lines += [
@@ -367,9 +364,8 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         details = {
             "raw_label": label,
             "accepted_label": None,
-            "confidence": confidence,
+            "highest_confidence": confidence,
             "confidence_gate": SENTENCE_MIN_CONFIDENCE,
-            "top5": [{"label": name, "score": score} for name, score in top5],
             "extract_ms": extract_ms,
             "inference_ms": infer_ms,
             "clip_shape": list(clip_volume.shape),
@@ -400,14 +396,11 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         f"# {label}",
         f"Confidence: **{confidence:.1%}**",
         "",
-        "### Top 5 Sentences",
     ]
-    for index, (name, score) in enumerate(top5, start=1):
-        lines.append(f"{index}. {name} — {score:.1%}")
     lines += [
         "",
         f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
-        f"Preprocess: {extract_ms} ms · Inference: {infer_ms} ms",
+        f"Preprocess: {extract_ms} ms / Inference: {infer_ms} ms",
         "",
         "Note: this is a closed-vocabulary How2Sign sentence model trained on repeated-sentence subsets.",
     ]
@@ -417,7 +410,6 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         "accepted_label": label,
         "confidence": confidence,
         "confidence_gate": SENTENCE_MIN_CONFIDENCE,
-        "top5": [{"label": name, "score": score} for name, score in top5],
         "extract_ms": extract_ms,
         "inference_ms": infer_ms,
         "clip_shape": list(clip_volume.shape),
