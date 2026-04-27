@@ -227,9 +227,27 @@ def _status_markdown(state: dict[str, Any]) -> str:
     )
 
 
-def reset_live() -> tuple[dict[str, Any], str]:
+def _sentence_watch_markdown() -> str:
+    if SENTENCE_RUNTIME is None:
+        reason = SENTENCE_RUNTIME_ERROR or "sentence runtime not initialized"
+        return (
+            "### Sentence Watch\n\n"
+            "How2Sign sentence model is unavailable.\n\n"
+            f"- Status: **not loaded**\n"
+            f"- Reason: {reason}"
+        )
+    return (
+        "### Sentence Watch\n\n"
+        "How2Sign sentence model is ready for clip uploads.\n\n"
+        f"- Status: **loaded**\n"
+        f"- Classes: {len(SENTENCE_RUNTIME.labels)}\n"
+        f"- Inference mode: {SENTENCE_RUNTIME.inference_mode}"
+    )
+
+
+def reset_live() -> tuple[dict[str, Any], str, str]:
     state = init_live_state()
-    return state, _status_markdown(state)
+    return state, _status_markdown(state), _sentence_watch_markdown()
 
 
 # ---------------------------------------------------------------------------
@@ -509,6 +527,7 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
                 )
             with gr.Column(scale=1):
                 live_status = gr.Markdown(_status_markdown(init_live_state()))
+                sentence_watch = gr.Markdown(_sentence_watch_markdown())
                 reset_btn = gr.Button("Reset caption")
         webcam.stream(
             on_live_frame,
@@ -517,7 +536,7 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
             show_progress="hidden",
             stream_every=0.2,
         )
-        reset_btn.click(reset_live, outputs=[live_state, live_status])
+        reset_btn.click(reset_live, outputs=[live_state, live_status, sentence_watch])
 
     with gr.Tab("Upload / Record Clip"):
         gr.Markdown(
