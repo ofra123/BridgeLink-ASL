@@ -17,9 +17,10 @@ authors = [
 ]
 dependencies = [
   "gradio>=4.44",
-  "numpy>=1.26",
-  "opencv-python-headless>=4.9",
-  "mediapipe>=0.10.21",
+  "numpy>=1.26,<2",
+  "opencv-contrib-python==4.11.0.86",
+  "mediapipe==0.10.14",
+  "protobuf>=3.20,<5",
   "torch>=2.2",
   "huggingface_hub>=0.24",
 ]
@@ -27,10 +28,21 @@ dependencies = [
 [project.optional-dependencies]
 speech = ["pyttsx3>=2.90"]
 cloud = ["elevenlabs>=1.7.0"]
+training = ["tensorflow>=2.16,<2.20", "matplotlib>=3.8"]
+vlm = [
+  "transformers>=4.51,<5",
+  "accelerate>=0.30",
+  "safetensors>=0.4",
+]
 dev = ["pytest>=8.3"]
 
 [project.scripts]
 bridgelink-demo = "bridgelink_asl.cli.run_demo:main"
+run_demo = "bridgelink_asl.cli.run_demo:main"
+train_model = "bridgelink_asl.cli.train_model:main"
+evaluate_model = "bridgelink_asl.cli.evaluate_model:main"
+train_cnn_model = "bridgelink_asl.cli.train_cnn_model:main"
+run_wrapper = "bridgelink_asl.cli.run_wrapper:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/bridgelink_asl"]

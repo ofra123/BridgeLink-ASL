@@ -35,6 +35,12 @@ SentenceInterpreter
 
 The mock interpreter should always work without model downloads. The local Qwen2.5-VL interpreter should be enabled only when the model is installed and configured.
 
+Install the optional local VLM stack with:
+
+```bash
+pip install -e ".[vlm]"
+```
+
 The VLM path is now compared directly against the CNN baseline. It should consume the same clip manifest records as the CNN branch, then produce sentence-level JSON that the comparison wrapper can score.
 
 ## Prompting Rule
@@ -56,6 +62,11 @@ The model should return strict JSON:
 ```
 
 If the VLM output is invalid or low confidence, the pipeline should fall back to a simple gloss sentence from the token trace.
+
+For isolated-sign hybrid evaluation rows, the wrapper also accepts the
+`video_id` / `true_label` / `cnn_top5` JSONL format already produced by the
+Colab notebook. In that mode, the local VLM chooses one label from the CNN's
+candidate list while the CNN baseline remains the top-1 candidate.
 
 ## Practical Demo Note
 

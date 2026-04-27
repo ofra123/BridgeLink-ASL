@@ -1,0 +1,88 @@
+{
+  "threshold_stats": [
+    {
+      "label": "All matched clips",
+      "clip_count": 31047,
+      "class_count": 30008
+    },
+    {
+      "label": "Repeated >= 2",
+      "clip_count": 1487,
+      "class_count": 448
+    },
+    {
+      "label": "Repeated >= 3",
+      "clip_count": 769,
+      "class_count": 89
+    },
+    {
+      "label": "Repeated >= 5",
+      "clip_count": 611,
+      "class_count": 41
+    },
+    {
+      "label": "Repeated >= 8",
+      "clip_count": 531,
+      "class_count": 26
+    },
+    {
+      "label": "Top-12 subset",
+      "clip_count": 218,
+      "class_count": 12
+    },
+    {
+      "label": "Top-25 subset",
+      "clip_count": 479,
+      "class_count": 25
+    }
+  ],
+  "benchmark_stats": [
+    {
+      "name": "Top-12 subset",
+      "total_clips": 218,
+      "num_classes": 12,
+      "train_clips": 150,
+      "val_clips": 34,
+      "test_clips": 34,
+      "val_accuracy": 0.14705882966518402,
+      "test_accuracy": 0.14705882966518402,
+      "val_loss": 4.223854064941406,
+      "test_loss": 4.068099498748779
+    },
+    {
+      "name": "Top-25 subset",
+      "total_clips": 479,
+      "num_classes": 25,
+      "train_clips": 335,
+      "val_clips": 72,
+      "test_clips": 72,
+      "val_accuracy": 0.2083333283662796,
+      "test_accuracy": 0.2083333283662796,
+      "val_loss": 2.953240394592285,
+      "test_loss": 2.8787331581115723
+    }
+  ],
+  "experiment_stats": [
+    {
+      "name": "Top-25 best",
+      "training_change": "baseline checkpoint",
+      "val_accuracy": 0.2083333283662796,
+      "test_accuracy": 0.2083333283662796,
+      "test_loss": 2.8787331581115723
+    },
+    {
+      "name": "Top-25 continued",
+      "training_change": "18 more epochs",
+      "val_accuracy": 0.1944444477558136,
+      "test_accuracy": 0.1805555522441864,
+      "test_loss": 2.882232904434204
+    },
+    {
+      "name": "Top-25 weighted",
+      "training_change": "balanced class weights",
+      "val_accuracy": 0.1388888955116272,
+      "test_accuracy": 0.1388888955116272,
+      "test_loss": 3.084449291229248
+    }
+  ]
+}

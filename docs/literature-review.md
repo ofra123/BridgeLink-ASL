@@ -1,6 +1,6 @@
 # Literature Review
 
-Five academic papers reviewed for the project (one per team member + one extra).
+Five academic and technical sources reviewed for the project.
 
 ## 1. Li et al., "Word-level Deep Sign Language Recognition from Video" (WACV 2020)
 
@@ -42,8 +42,3 @@ Five academic papers reviewed for the project (one per team member + one extra).
 
 **What we borrow:** The insight that separating hand and body landmark streams improves recognition. Our feature vector explicitly groups left-hand, right-hand, and pose blocks, and our horizontal-flip augmentation swaps the hand blocks accordingly.
 
-## 6. Duarte et al., "How2Sign" (CVPR 2021)
-
-**Why relevant:** A large-scale continuous ASL translation corpus that we initially considered as our primary dataset. We ultimately chose WLASL-100 (isolated word-level) instead because continuous translation is a harder problem requiring sequence-to-sequence modeling beyond our project scope.
-
-**What we learned:** Continuous ASL translation remains an open research problem. Our word-level system is a practical building block toward that goal.

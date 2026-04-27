@@ -1,12 +1,11 @@
-"""BridgeLink ASL — Hugging Face Space entrypoint.
+"""BridgeLink ASL Hugging Face Space entrypoint.
 
-Loads a trained SignTransformer and runs two demo modes:
-- Live webcam streaming (frame-by-frame sliding window prediction).
-- Uploaded / recorded clip classification.
+This Space now exposes two model paths:
+- A landmark-based WLASL live/demo classifier.
+- A How2Sign sentence-level 3D CNN for uploaded clips.
 
-Set the HF_MODEL_REPO env var (e.g. "your-username/bridgelink-asl-wlasl100")
-to auto-download weights from the Hugging Face Hub on Space startup. If unset,
-the app looks for models/sign_transformer_best.pt in the repo root.
+Set HF_MODEL_REPO / HF_MODEL_FILENAME for the landmark model and
+HF_SENTENCE_MODEL_REPO / HF_SENTENCE_MODEL_FILENAME for the How2Sign model.
 """
 
 from __future__ import annotations
@@ -30,8 +29,14 @@ if str(SRC_ROOT) not in sys.path:
 from bridgelink_asl.inference import (  # noqa: E402
     SignLanguageRuntime,
     load_runtime,
-    extract_landmarks_from_frame,
+    process_frame_for_landmarks,
+    draw_tracking_overlay,
     extract_landmarks_from_video,
+)
+from bridgelink_asl.sentence_inference import (  # noqa: E402
+    SentenceClipRuntime,
+    extract_clip_volume,
+    load_sentence_runtime,
 )
 
 # ---------------------------------------------------------------------------
@@ -39,21 +44,43 @@ from bridgelink_asl.inference import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 MODEL_REPO = os.environ.get("HF_MODEL_REPO", "").strip()
-LOCAL_WEIGHTS = PROJECT_ROOT / "models" / "sign_transformer_best.pt"
+MODEL_FILENAME = os.environ.get("HF_MODEL_FILENAME", "cnn_landmark_wlasl25_best.pt").strip()
+LOCAL_WEIGHTS = PROJECT_ROOT / "models" / MODEL_FILENAME
+SENTENCE_MODEL_REPO = os.environ.get("HF_SENTENCE_MODEL_REPO", "").strip()
+SENTENCE_MODEL_FILENAME = os.environ.get("HF_SENTENCE_MODEL_FILENAME", "cnn-3d-sentence-top25.keras").strip()
+LOCAL_SENTENCE_WEIGHTS = PROJECT_ROOT / "models" / SENTENCE_MODEL_FILENAME
 SEQ_LEN = 32
 STRIDE = 4                     # run inference every STRIDE frames
-MIN_CONFIDENCE = 0.35          # below this, show nothing
+MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_MIN_CONFIDENCE", "0.55"))
+SENTENCE_MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_SENTENCE_MIN_CONFIDENCE", "0.55"))
 STABILITY_K = 2                # require K consecutive same predictions before emitting
 
 RUNTIME: SignLanguageRuntime | None = None
 RUNTIME_ERROR: str | None = None
+SENTENCE_RUNTIME: SentenceClipRuntime | None = None
+SENTENCE_RUNTIME_ERROR: str | None = None
 
 try:
-    RUNTIME = load_runtime(local_path=LOCAL_WEIGHTS, hf_repo=MODEL_REPO or None)
+    RUNTIME = load_runtime(
+        local_path=LOCAL_WEIGHTS,
+        hf_repo=MODEL_REPO or None,
+        hf_filename=MODEL_FILENAME,
+    )
     print(f"[bridgelink] loaded model with {len(RUNTIME.labels)} classes")
 except Exception as exc:  # keep the Space bootable even if weights are missing
     RUNTIME_ERROR = f"{type(exc).__name__}: {exc}"
     print(f"[bridgelink] WARNING: model not loaded — {RUNTIME_ERROR}")
+
+try:
+    SENTENCE_RUNTIME = load_sentence_runtime(
+        local_model_path=LOCAL_SENTENCE_WEIGHTS,
+        hf_repo=SENTENCE_MODEL_REPO or None,
+        hf_model_filename=SENTENCE_MODEL_FILENAME,
+    )
+    print(f"[bridgelink] loaded sentence cnn with {len(SENTENCE_RUNTIME.labels)} classes")
+except Exception as exc:  # keep the Space bootable even if weights are missing
+    SENTENCE_RUNTIME_ERROR = f"{type(exc).__name__}: {exc}"
+    print(f"[bridgelink] WARNING: sentence cnn not loaded — {SENTENCE_RUNTIME_ERROR}")
 
 
 def _require_runtime() -> SignLanguageRuntime:
@@ -61,9 +88,19 @@ def _require_runtime() -> SignLanguageRuntime:
         raise gr.Error(
             "Model weights are not available on this Space. "
             "Set the HF_MODEL_REPO env var or upload "
-            "models/sign_transformer_best.pt to the repo."
+            "models/cnn_landmark_wlasl25_best.pt to the repo."
         )
     return RUNTIME
+
+
+def _require_sentence_runtime() -> SentenceClipRuntime:
+    if SENTENCE_RUNTIME is None:
+        raise gr.Error(
+            "How2Sign sentence CNN weights are not available on this Space. "
+            "Set HF_SENTENCE_MODEL_REPO or upload "
+            "models/cnn-3d-sentence-top25.keras and its labels file to the repo."
+        )
+    return SENTENCE_RUNTIME
 
 
 # ---------------------------------------------------------------------------
@@ -75,6 +112,9 @@ def init_live_state() -> dict[str, Any]:
         "buffer": deque(maxlen=SEQ_LEN),
         "frame_idx": 0,
         "last_label": None,
+        "candidate_label": None,
+        "candidate_confidence": None,
+        "candidate_top5": [],
         "stable_count": 0,
         "caption": "",
         "history": [],
@@ -87,12 +127,12 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
     if state is None:
         state = init_live_state()
     if frame is None:
-        return frame, state["caption"], state
+        return None, _status_markdown(state), state
 
     runtime = _require_runtime()
 
     # Extract landmarks for this frame and append to the rolling buffer.
-    lm = extract_landmarks_from_frame(frame)
+    lm, tracking_result = process_frame_for_landmarks(frame)
     state["buffer"].append(lm)
     state["frame_idx"] += 1
 
@@ -105,8 +145,11 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
         sequence = np.stack(list(state["buffer"]))   # (32, 225)
         label, confidence, top5 = runtime.predict(sequence)
         state["last_inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
+        state["candidate_confidence"] = confidence
 
         if confidence >= MIN_CONFIDENCE:
+            state["candidate_label"] = label
+            state["candidate_top5"] = top5
             if label == state["last_label"]:
                 state["stable_count"] += 1
             else:
@@ -121,8 +164,20 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
                     state["history"].append(label)
                     state["history"] = state["history"][-12:]  # keep last 12
                     state["caption"] = _format_caption(state["history"])
+        else:
+            state["candidate_label"] = None
+            state["candidate_top5"] = []
+            state["stable_count"] = 0
 
-    return frame, _status_markdown(state), state
+    tracking_overlay = draw_tracking_overlay(
+        frame,
+        tracking_result,
+        label=state.get("candidate_label"),
+        confidence=state.get("candidate_confidence"),
+        top5=state.get("candidate_top5"),
+        buffer_size=len(state["buffer"]),
+    )
+    return tracking_overlay, _status_markdown(state), state
 
 
 def _format_caption(history: list[str]) -> str:
@@ -134,12 +189,39 @@ def _format_caption(history: list[str]) -> str:
 
 def _status_markdown(state: dict[str, Any]) -> str:
     caption = state.get("caption") or "_Start signing..._"
-    last_label = state.get("last_label") or "—"
+    last_label = state.get("candidate_label") or "--"
+    confidence = state.get("candidate_confidence")
+    confidence_text = f"{confidence:.1%}" if confidence is not None else "--"
     infer = state.get("last_inference_ms", 0.0)
     buf = len(state["buffer"]) if state.get("buffer") is not None else 0
     return (
         f"### Caption\n\n{caption}\n\n"
         f"- Current candidate: **{last_label}**\n"
+        f"- Candidate confidence: **{confidence_text}**\n"
+        f"- Buffer: {buf}/{SEQ_LEN} frames\n"
+        f"- Last inference: {infer} ms"
+    )
+
+
+def _format_caption(history: list[str]) -> str:
+    if not history:
+        return "_Waiting for a confident sign..._"
+    words = [w.replace("_", " ").title() for w in history]
+    return "**" + " / ".join(words) + "**"
+
+
+def _status_markdown(state: dict[str, Any]) -> str:
+    caption = state.get("caption") or "_Waiting for a confident sign..._"
+    last_label = state.get("candidate_label") or "Waiting"
+    confidence = state.get("candidate_confidence")
+    confidence_text = f"{confidence:.1%}" if confidence is not None else "--"
+    infer = state.get("last_inference_ms", 0.0)
+    buf = len(state["buffer"]) if state.get("buffer") is not None else 0
+    return (
+        f"### Caption\n\n{caption}\n\n"
+        f"- Confirmed candidate: **{last_label}**\n"
+        f"- Confidence gate: **{MIN_CONFIDENCE:.0%}**\n"
+        f"- Latest confidence: **{confidence_text}**\n"
         f"- Buffer: {buf}/{SEQ_LEN} frames\n"
         f"- Last inference: {infer} ms"
     )
@@ -170,6 +252,24 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
     label, confidence, top5 = runtime.predict(sequence)
     infer_ms = round((time.perf_counter() - t0) * 1000, 1)
 
+    if confidence < MIN_CONFIDENCE:
+        details = {
+            "raw_label": label,
+            "accepted_label": None,
+            "confidence": confidence,
+            "confidence_gate": MIN_CONFIDENCE,
+            "top5": [{"label": n, "score": s} for n, s in top5],
+            "extract_ms": extract_ms,
+            "inference_ms": infer_ms,
+            "sequence_shape": list(sequence.shape),
+        }
+        return (
+            "## No Confident Sign Yet\n\n"
+            f"Highest confidence: **{confidence:.1%}**\n\n"
+            f"Confidence gate: **{MIN_CONFIDENCE:.0%}**",
+            details,
+        )
+
     lines = [
         f"## Prediction: **{label.replace('_', ' ').title()}**",
         f"Confidence: **{confidence:.1%}**",
@@ -181,12 +281,96 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
     lines += ["", f"Landmark extraction: {extract_ms} ms · Inference: {infer_ms} ms"]
 
     details = {
-        "label": label,
+        "raw_label": label,
+        "accepted_label": label,
         "confidence": confidence,
+        "confidence_gate": MIN_CONFIDENCE,
         "top5": [{"label": n, "score": s} for n, s in top5],
         "extract_ms": extract_ms,
         "inference_ms": infer_ms,
         "sequence_shape": list(sequence.shape),
+    }
+    return "\n".join(lines), details
+
+
+def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
+    if not video_path:
+        return "Please upload or record a clip first.", {}
+
+    runtime = _require_sentence_runtime()
+
+    t0 = time.perf_counter()
+    clip_volume, clip_meta = extract_clip_volume(
+        video_path,
+        frame_count=runtime.frame_count,
+        image_size=runtime.image_size,
+    )
+    extract_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    if clip_volume is None:
+        return "Could not decode the clip for the sentence CNN.", dict(clip_meta)
+
+    t0 = time.perf_counter()
+    label, confidence, top5 = runtime.predict_clip(clip_volume)
+    infer_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    if confidence < SENTENCE_MIN_CONFIDENCE:
+        details = {
+            "raw_label": label,
+            "accepted_label": None,
+            "confidence": confidence,
+            "confidence_gate": SENTENCE_MIN_CONFIDENCE,
+            "top5": [{"label": name, "score": score} for name, score in top5],
+            "extract_ms": extract_ms,
+            "inference_ms": infer_ms,
+            "clip_shape": list(clip_volume.shape),
+            "frame_count": runtime.frame_count,
+            "image_size": runtime.image_size,
+            **clip_meta,
+        }
+        lines = [
+            "## No Confident Sentence Yet",
+            "",
+            "The clip was processed, but the model did not clear the display threshold.",
+            "",
+            f"Highest confidence: **{confidence:.1%}**",
+            f"Confidence gate: **{SENTENCE_MIN_CONFIDENCE:.0%}**",
+            "",
+            f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
+            f"Preprocess: {extract_ms} ms / Inference: {infer_ms} ms",
+        ]
+        return "\n".join(lines), details
+
+    lines = [
+        "## Confident Sentence",
+        "",
+        f"# {label}",
+        f"Confidence: **{confidence:.1%}**",
+        "",
+        "### Top 5 Sentences",
+    ]
+    for index, (name, score) in enumerate(top5, start=1):
+        lines.append(f"{index}. {name} — {score:.1%}")
+    lines += [
+        "",
+        f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
+        f"Preprocess: {extract_ms} ms · Inference: {infer_ms} ms",
+        "",
+        "Note: this is a closed-vocabulary How2Sign sentence model trained on repeated-sentence subsets.",
+    ]
+
+    details = {
+        "raw_label": label,
+        "accepted_label": label,
+        "confidence": confidence,
+        "confidence_gate": SENTENCE_MIN_CONFIDENCE,
+        "top5": [{"label": name, "score": score} for name, score in top5],
+        "extract_ms": extract_ms,
+        "inference_ms": infer_ms,
+        "clip_shape": list(clip_volume.shape),
+        "frame_count": runtime.frame_count,
+        "image_size": runtime.image_size,
+        **clip_meta,
     }
     return "\n".join(lines), details
 
@@ -197,6 +381,7 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
 
 def load_metrics() -> dict[str, Any]:
     candidates = [
+        PROJECT_ROOT / "results" / "cnn_metrics.json",
         PROJECT_ROOT / "results" / "metrics.json",
         PROJECT_ROOT / "models" / "metrics.json",
     ]
@@ -212,6 +397,7 @@ def results_markdown() -> str:
         return m["status"]
     return (
         "## WLASL-100 results\n\n"
+        f"- Model: **{m.get('model', 'landmark model')}**\n"
         f"- Test top-1: **{m.get('test_top1', 0):.1%}**\n"
         f"- Test top-5: **{m.get('test_top5', 0):.1%}**\n"
         f"- Best val top-1: {m.get('val_top1_best', 0):.1%} "
@@ -227,10 +413,16 @@ def results_markdown() -> str:
 # UI
 # ---------------------------------------------------------------------------
 
-STATUS_BANNER = (
-    f"Model: **loaded — {len(RUNTIME.labels)} classes**"
+LANDMARK_STATUS_BANNER = (
+    f"WLASL landmark model: **loaded — {len(RUNTIME.labels)} classes**"
     if RUNTIME is not None
-    else f"Model: **NOT LOADED** ({RUNTIME_ERROR})"
+    else f"WLASL landmark model: **NOT LOADED** ({RUNTIME_ERROR})"
+)
+
+SENTENCE_STATUS_BANNER = (
+    f"How2Sign sentence CNN: **loaded — {len(SENTENCE_RUNTIME.labels)} classes**"
+    if SENTENCE_RUNTIME is not None
+    else f"How2Sign sentence CNN: **NOT LOADED** ({SENTENCE_RUNTIME_ERROR})"
 )
 
 
@@ -239,10 +431,12 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
         f"""
         # BridgeLink ASL
 
-        Real-time American Sign Language word recognition using MediaPipe
-        landmarks and a lightweight Transformer classifier trained on WLASL-100.
+        Real-time American Sign Language recognition demos for both
+        landmark-based isolated-sign classification and RGB clip-based
+        sentence classification.
 
-        {STATUS_BANNER}
+        - {LANDMARK_STATUS_BANNER}
+        - {SENTENCE_STATUS_BANNER}
         """
     )
 
@@ -261,14 +455,20 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
                     type="numpy",
                     label="Webcam",
                 )
+                tracking_view = gr.Image(
+                    type="numpy",
+                    label="MediaPipe tracking overlay",
+                    interactive=False,
+                )
             with gr.Column(scale=1):
                 live_status = gr.Markdown(_status_markdown(init_live_state()))
                 reset_btn = gr.Button("Reset caption")
         webcam.stream(
             on_live_frame,
             inputs=[webcam, live_state],
-            outputs=[webcam, live_status, live_state],
+            outputs=[tracking_view, live_status, live_state],
             show_progress="hidden",
+            stream_every=0.2,
         )
         reset_btn.click(reset_live, outputs=[live_state, live_status])
 
@@ -292,6 +492,27 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
             outputs=[clip_summary, clip_details],
         )
 
+    with gr.Tab("How2Sign Sentence CNN"):
+        gr.Markdown(
+            "Upload a short How2Sign-style RGB clip to run the closed-vocabulary "
+            "sentence classifier. This model predicts one sentence from the "
+            "repeated-sentence subset used in the 3D CNN experiments."
+        )
+        sentence_clip_input = gr.Video(
+            sources=["upload", "webcam"],
+            format="mp4",
+            include_audio=False,
+            label="How2Sign sentence clip",
+        )
+        sentence_button = gr.Button("Classify sentence clip", variant="primary")
+        sentence_summary = gr.Markdown()
+        sentence_details = gr.JSON(label="Sentence CNN details")
+        sentence_button.click(
+            classify_sentence_clip,
+            inputs=[sentence_clip_input],
+            outputs=[sentence_summary, sentence_details],
+        )
+
     with gr.Tab("Results"):
         results_md = gr.Markdown(results_markdown())
         gr.Markdown(
@@ -306,9 +527,10 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
             ## Method
 
             1. **Landmark extraction** — MediaPipe Holistic (21 left-hand + 21 right-hand + 33 pose landmarks × 3 coords = 225 dims per frame)
-            2. **Sequence model** — 4-layer Transformer encoder, 192-dim, 4 heads, CLS-token classification
-            3. **Training** — WLASL-100, 60 epochs, AdamW + cosine schedule, label smoothing, temporal + spatial augmentation
+            2. **Sequence model** — 1D landmark CNN over the 32-frame temporal sequence; optional Transformer extension for attention comparison
+            3. **Training** — WLASL-100, AdamW + cosine schedule, label smoothing, temporal + spatial augmentation
             4. **Inference** — rolling 32-frame buffer, stride 4, confidence threshold 0.35, stability filter of 2 consecutive frames before emission
+            5. **Sentence baseline** — sampled RGB clips from How2Sign passed through a 3D CNN that predicts one repeated sentence label
 
             ## Dataset
 
@@ -316,12 +538,18 @@ with gr.Blocks(title="BridgeLink ASL") as demo:
             from the Word-Level ASL video dataset. Distributed under the Computational
             Use of Data Agreement (C-UDA).
 
+            [How2Sign](https://how2sign.github.io/) — RGB sign-language sentence clips.
+            The current sentence CNN demo is limited to a repeated-sentence subset so the
+            classifier has enough examples per class.
+
             ## Limitations
 
             - Trained on WLASL-100 only — vocabulary is limited to 100 glosses.
             - Single-signer generalization depends on the diversity of the training split.
             - Continuous sentence translation is out of scope; the model classifies
               isolated signs from short windows.
+            - The How2Sign sentence demo is closed-vocabulary and only supports the
+              repeated sentence classes used during training.
             """
         )
 

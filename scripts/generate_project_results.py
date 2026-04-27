@@ -16,11 +16,16 @@ from bridgelink_asl.project_assets import write_comparison_artifacts  # noqa: E4
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate BridgeLink ASL experiment/report artifacts.")
-    parser.add_argument("--manifest", default="data/processed/how2sign_subset.example.jsonl")
+    parser.add_argument("--manifest", default="data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl")
     parser.add_argument("--output-dir", default="results")
+    parser.add_argument("--vlm-results", help="Optional JSONL output from run_wrapper compare mode.")
     args = parser.parse_args()
 
-    paths = write_comparison_artifacts(args.manifest, args.output_dir)
+    paths = write_comparison_artifacts(
+        args.manifest,
+        args.output_dir,
+        vlm_results_path=args.vlm_results,
+    )
     print("Generated report artifacts:")
     for name, path in paths.items():
         print(f"- {name}: {path}")

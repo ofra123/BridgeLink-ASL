@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 
@@ -46,6 +47,56 @@ class TranslationEvent:
     confidence: float
     frame_index: int
     tts_provider: str
+
+
+@dataclass(frozen=True)
+class DetectedGestureToken:
+    """One stable token detected within a sentence-sized gesture window."""
+
+    label: str
+    confidence: float
+    start_frame: int
+    end_frame: int
+
+
+@dataclass(frozen=True)
+class GestureWindow:
+    """Input contract shared by CNN, VLM, and compare wrapper modes."""
+
+    clip_id: str
+    sampled_frames: tuple[Path, ...]
+    token_trace: tuple[DetectedGestureToken, ...]
+    video_path: Path | None = None
+    candidate_labels: tuple[str, ...] = field(default_factory=tuple)
+    expected_gloss: tuple[str, ...] = field(default_factory=tuple)
+    expected_text: str = ""
+    source: str = "manifest"
+
+
+@dataclass(frozen=True)
+class SentenceEvent:
+    """Sentence-level output from the CNN or VLM path."""
+
+    gloss: tuple[str, ...]
+    sentence: str
+    confidence: float
+    model_mode: str
+    needs_clarification: bool = False
+    failure_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class ComparisonResult:
+    """Per-clip comparison output written by the wrapper."""
+
+    clip_id: str
+    expected_text: str
+    token_trace: tuple[DetectedGestureToken, ...]
+    cnn_prediction: SentenceEvent | None = None
+    vlm_prediction: SentenceEvent | None = None
+    cnn_latency_ms: float | None = None
+    vlm_latency_ms: float | None = None
+    failure_notes: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-"""Optional clip-CNN baseline for comparing against the VLM path."""
+"""Sentence-level 3D CNN baseline for closed-vocabulary video classification."""
 
 from __future__ import annotations
 
@@ -12,18 +12,22 @@ from .clip_dataset import ClipDatasetRecord, load_clip_dataset, summarize_clip_s
 
 @dataclass(frozen=True)
 class CnnModelConfig:
-    """Configuration for the sampled-frame CNN baseline."""
+    """Configuration for the sentence-level 3D CNN baseline."""
 
     frame_count: int = 16
-    image_size: int = 160
+    image_size: int = 112
     channels: int = 3
-    batch_size: int = 4
-    epochs: int = 8
-    learning_rate: float = 0.001
-    dropout: float = 0.25
-    conv_filters: tuple[int, ...] = (32, 64, 128)
-    model_path: Path = field(default_factory=lambda: Path("models/cnn-baseline.keras"))
-    manifest_path: Path = field(default_factory=lambda: Path("data/processed/sample_sentence_clips.jsonl"))
+    batch_size: int = 2
+    epochs: int = 20
+    learning_rate: float = 0.0003
+    dropout: float = 0.4
+    conv_filters: tuple[int, ...] = (16, 32, 64)
+    class_weight_mode: str | None = None
+    early_stopping_patience: int = 5
+    reduce_lr_patience: int = 2
+    min_learning_rate: float = 1e-5
+    model_path: Path = field(default_factory=lambda: Path("models/cnn-3d-sentence.keras"))
+    manifest_path: Path = field(default_factory=lambda: Path("data/processed/how2sign_sentences_top12.jsonl"))
 
     @property
     def input_shape(self) -> tuple[int, int, int, int]:
@@ -32,7 +36,7 @@ class CnnModelConfig:
 
 @dataclass(frozen=True)
 class CnnTrainingPlan:
-    """Dry-run summary for the CNN branch."""
+    """Dry-run summary for the sentence-level CNN branch."""
 
     labels: tuple[str, ...]
     split_distribution: dict[str, int]
@@ -54,13 +58,19 @@ class CnnTrainingPlan:
 
 @dataclass(frozen=True)
 class CnnTrainingSummary:
-    """Result from a real CNN training run."""
+    """Result from a real 3D CNN training run."""
 
     manifest_path: str
     output_path: str
     labels: tuple[str, ...]
     epochs: int
     split_distribution: dict[str, int]
+    resumed_from: str | None = None
+    class_weight_mode: str | None = None
+    best_epoch: int | None = None
+    best_val_accuracy: float | None = None
+    test_loss: float | None = None
+    test_accuracy: float | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -69,25 +79,32 @@ class CnnTrainingSummary:
             "labels": list(self.labels),
             "epochs": self.epochs,
             "split_distribution": self.split_distribution,
+            "resumed_from": self.resumed_from,
+            "class_weight_mode": self.class_weight_mode,
+            "best_epoch": self.best_epoch,
+            "best_val_accuracy": self.best_val_accuracy,
+            "test_loss": self.test_loss,
+            "test_accuracy": self.test_accuracy,
         }
 
 
 def describe_cnn_baseline(config: CnnModelConfig, num_classes: int) -> dict[str, Any]:
-    """Describe the CNN architecture without importing TensorFlow."""
+    """Describe the 3D CNN architecture without importing TensorFlow."""
 
     return {
-        "model_family": "sampled-frame-clip-cnn",
-        "comparison_role": "CNN baseline against Qwen2.5-VL sentence mode",
+        "model_family": "sentence-3d-cnn",
+        "comparison_role": "Sentence-level RGB video baseline against VLM sentence interpretation",
         "input_shape": list(config.input_shape),
         "num_classes": num_classes,
-        "temporal_strategy": "shared 2D CNN per sampled frame followed by temporal average pooling",
+        "temporal_strategy": "Conv3D over sampled RGB clip volumes",
         "conv_filters": list(config.conv_filters),
+        "learning_rate": config.learning_rate,
         "dropout": config.dropout,
     }
 
 
 def build_cnn_training_plan(records: Iterable[ClipDatasetRecord], config: CnnModelConfig) -> CnnTrainingPlan:
-    """Build a dry-run training plan from clip metadata."""
+    """Build a dry-run training plan from sentence clip metadata."""
 
     materialized = list(records)
     labels = tuple(sorted({record.label for record in materialized}))
@@ -124,27 +141,31 @@ def select_frame_paths(frame_paths: Iterable[Path], frame_count: int) -> tuple[P
 
 
 def build_clip_cnn_model(num_classes: int, config: CnnModelConfig):
-    """Build and compile the optional TensorFlow/Keras clip CNN."""
+    """Build and compile the TensorFlow/Keras 3D CNN."""
 
     tf = _require_tensorflow()
     if num_classes <= 1:
         raise ValueError("CNN training requires at least two sentence classes.")
 
     inputs = tf.keras.Input(shape=config.input_shape, name="clip_frames")
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Rescaling(1.0 / 255.0), name="rescale_frames")(inputs)
-    for filters in config.conv_filters:
-        x = tf.keras.layers.TimeDistributed(
-            tf.keras.layers.Conv2D(filters, kernel_size=3, padding="same", activation="relu")
+    x = tf.keras.layers.Rescaling(1.0 / 255.0, name="rescale_frames")(inputs)
+    for index, filters in enumerate(config.conv_filters):
+        x = tf.keras.layers.Conv3D(
+            filters,
+            kernel_size=(3, 3, 3),
+            padding="same",
+            activation="relu",
+            name=f"conv3d_{index + 1}",
         )(x)
-        x = tf.keras.layers.TimeDistributed(tf.keras.layers.BatchNormalization())(x)
-        x = tf.keras.layers.TimeDistributed(tf.keras.layers.MaxPooling2D(pool_size=2))(x)
+        x = tf.keras.layers.BatchNormalization(name=f"bn3d_{index + 1}")(x)
+        pool = (1, 2, 2) if index == 0 else (2, 2, 2)
+        x = tf.keras.layers.MaxPooling3D(pool_size=pool, name=f"pool3d_{index + 1}")(x)
 
-    x = tf.keras.layers.TimeDistributed(tf.keras.layers.GlobalAveragePooling2D(), name="frame_embeddings")(x)
-    x = tf.keras.layers.GlobalAveragePooling1D(name="temporal_average_pool")(x)
-    x = tf.keras.layers.Dropout(config.dropout)(x)
+    x = tf.keras.layers.GlobalAveragePooling3D(name="clip_embedding")(x)
+    x = tf.keras.layers.Dropout(config.dropout, name="dropout")(x)
     outputs = tf.keras.layers.Dense(num_classes, activation="softmax", name="sentence_class")(x)
 
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="bridgelink_clip_cnn")
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name="bridgelink_sentence_3dcnn")
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=config.learning_rate),
         loss="sparse_categorical_crossentropy",
@@ -157,8 +178,10 @@ def train_clip_cnn_model(
     manifest_path: str | Path,
     output_path: str | Path | None = None,
     config: CnnModelConfig | None = None,
+    *,
+    resume_from: str | Path | None = None,
 ) -> CnnTrainingSummary:
-    """Train the CNN baseline from sampled frame paths in a clip manifest."""
+    """Train the 3D CNN baseline from sampled frame paths in a clip manifest."""
 
     active_config = config or CnnModelConfig()
     manifest = Path(manifest_path).expanduser().resolve()
@@ -177,17 +200,52 @@ def train_clip_cnn_model(
     label_to_index = {label: index for index, label in enumerate(plan.labels)}
     train_records = [record for record in records if record.split == "train"]
     val_records = [record for record in records if record.split == "val"]
-
-    model = build_clip_cnn_model(num_classes=len(plan.labels), config=active_config)
-    train_dataset = _build_tf_dataset(tf, train_records, label_to_index, active_config, shuffle=True)
-    val_dataset = _build_tf_dataset(tf, val_records, label_to_index, active_config, shuffle=False) if val_records else None
-    model.fit(train_dataset, validation_data=val_dataset, epochs=active_config.epochs)
+    test_records = [record for record in records if record.split == "test"]
 
     save_path = Path(output_path or active_config.model_path).expanduser().resolve()
     save_path.parent.mkdir(parents=True, exist_ok=True)
+    best_weights_path = save_path.with_name(f"{save_path.stem}.best.weights.h5")
+    resume_path = Path(resume_from).expanduser().resolve() if resume_from else None
+    model = _load_or_build_clip_cnn_model(
+        num_classes=len(plan.labels),
+        config=active_config,
+        save_path=save_path,
+        resume_path=resume_path,
+    )
+    train_dataset = _build_tf_dataset(tf, train_records, label_to_index, active_config, shuffle=True)
+    val_dataset = _build_tf_dataset(tf, val_records, label_to_index, active_config, shuffle=False) if val_records else None
+    test_dataset = _build_tf_dataset(tf, test_records, label_to_index, active_config, shuffle=False) if test_records else None
+    history = model.fit(
+        train_dataset,
+        validation_data=val_dataset,
+        epochs=active_config.epochs,
+        class_weight=_build_class_weights(train_records, label_to_index, active_config.class_weight_mode),
+        callbacks=_build_training_callbacks(tf, active_config, best_weights_path, monitor_validation=val_dataset is not None),
+        verbose=1,
+    )
+    if best_weights_path.exists():
+        model.load_weights(best_weights_path)
+        best_weights_path.unlink()
+
     model.save(save_path)
     label_path = save_path.with_suffix(".labels.json")
     label_path.write_text(json.dumps({"labels": list(plan.labels)}, indent=2), encoding="utf-8")
+
+    val_history = history.history.get("val_accuracy", [])
+    best_epoch = None
+    best_val_accuracy = None
+    if val_history:
+        best_epoch = max(range(len(val_history)), key=val_history.__getitem__) + 1
+        best_val_accuracy = float(val_history[best_epoch - 1])
+
+    test_loss = None
+    test_accuracy = None
+    if test_dataset is not None:
+        test_metrics = model.evaluate(test_dataset, verbose=0)
+        if test_metrics:
+            test_loss = float(test_metrics[0])
+        if len(test_metrics) > 1:
+            test_accuracy = float(test_metrics[1])
 
     return CnnTrainingSummary(
         manifest_path=str(manifest),
@@ -195,6 +253,12 @@ def train_clip_cnn_model(
         labels=plan.labels,
         epochs=active_config.epochs,
         split_distribution=plan.split_distribution,
+        resumed_from=str(resume_path) if resume_path is not None else None,
+        class_weight_mode=active_config.class_weight_mode,
+        best_epoch=best_epoch,
+        best_val_accuracy=best_val_accuracy,
+        test_loss=test_loss,
+        test_accuracy=test_accuracy,
     )
 
 
@@ -223,7 +287,114 @@ def _build_tf_dataset(
         )
         return images, label
 
-    return dataset.map(load_clip).batch(config.batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset.map(load_clip, num_parallel_calls=tf.data.AUTOTUNE).batch(config.batch_size).prefetch(tf.data.AUTOTUNE)
+
+
+def _build_training_callbacks(
+    tf: Any,
+    config: CnnModelConfig,
+    best_weights_path: Path,
+    *,
+    monitor_validation: bool,
+) -> list[Any]:
+    callbacks: list[Any] = []
+    if not monitor_validation:
+        return callbacks
+
+    callbacks.append(
+        tf.keras.callbacks.ModelCheckpoint(
+            filepath=str(best_weights_path),
+            monitor="val_accuracy",
+            mode="max",
+            save_best_only=True,
+            save_weights_only=True,
+            verbose=0,
+        )
+    )
+    callbacks.append(
+        tf.keras.callbacks.EarlyStopping(
+            monitor="val_accuracy",
+            mode="max",
+            patience=config.early_stopping_patience,
+            restore_best_weights=True,
+            verbose=0,
+        )
+    )
+    callbacks.append(
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss",
+            mode="min",
+            factor=0.5,
+            patience=config.reduce_lr_patience,
+            min_lr=config.min_learning_rate,
+            verbose=0,
+        )
+    )
+    return callbacks
+
+
+def _build_class_weights(
+    records: Iterable[ClipDatasetRecord],
+    label_to_index: dict[str, int],
+    mode: str | None,
+) -> dict[int, float] | None:
+    if mode is None:
+        return None
+    if mode != "balanced":
+        raise ValueError(f"Unsupported class weight mode: {mode}")
+
+    counts: dict[int, int] = {}
+    for record in records:
+        label_index = label_to_index[record.label]
+        counts[label_index] = counts.get(label_index, 0) + 1
+
+    if not counts:
+        return None
+
+    total = sum(counts.values())
+    class_count = len(counts)
+    return {
+        label_index: total / (class_count * count)
+        for label_index, count in counts.items()
+    }
+
+
+def _load_or_build_clip_cnn_model(
+    *,
+    num_classes: int,
+    config: CnnModelConfig,
+    save_path: Path,
+    resume_path: Path | None,
+):
+    if resume_path is None:
+        return build_clip_cnn_model(num_classes=num_classes, config=config)
+
+    if not resume_path.exists():
+        raise ValueError(f"Resume checkpoint does not exist: {resume_path}")
+
+    tf = _require_tensorflow()
+    model = tf.keras.models.load_model(resume_path)
+    expected_input_shape = (None, *config.input_shape)
+    if tuple(model.input_shape) != expected_input_shape:
+        raise ValueError(
+            "Resume checkpoint input shape does not match requested config: "
+            f"{tuple(model.input_shape)} != {expected_input_shape}"
+        )
+    if tuple(model.output_shape) != (None, num_classes):
+        raise ValueError(
+            "Resume checkpoint output classes do not match manifest labels: "
+            f"{tuple(model.output_shape)} != {(None, num_classes)}"
+        )
+    if not getattr(model, "optimizer", None):
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=config.learning_rate),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+    if resume_path != save_path:
+        # Keep the best checkpoint and final save under the requested output name.
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+    return model
 
 
 def _load_image(tf: Any, path: Any, config: CnnModelConfig):
@@ -238,7 +409,7 @@ def _require_tensorflow():
         import tensorflow as tf  # type: ignore[import-not-found]
     except ImportError as exc:
         raise RuntimeError(
-            "TensorFlow is required for CNN training. Install it with "
+            "TensorFlow is required for sentence CNN training. Install it with "
             "`pip install -e .[training]` before running the CNN trainer."
         ) from exc
     return tf

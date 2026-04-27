@@ -7,6 +7,10 @@ Place the training outputs here after running the Colab notebook.
 | File | Used by |
 |---|---|
 | `metrics.json` | The app's Results tab, and for filling in the report TODOs |
+| `cnn_metrics.json` | Primary CNN metrics for the CNN vs VLM comparison |
+| `cnn_training_curves.png` | CNN report figure |
+| `cnn_confusion_matrix.png` | CNN report figure |
+| `cnn_classification_report.txt` | CNN per-class precision/recall table |
 | `class_distribution.png` | Report Figure 1 |
 | `split_distribution.png` | Report Figure 2 |
 | `training_curves.png` | Report Figure 3 |
@@ -21,7 +25,7 @@ Copy these into `report/figures/` as well for the LaTeX build.
 Run:
 
 ```bash
-python scripts/evaluate_hybrid_vlm.py --manifest data/vlm_eval_wlasl25/wlasl25_hybrid_eval.jsonl --output-dir results/vlm_eval
+python scripts/evaluate_hybrid_vlm.py --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl --output-dir results/vlm_eval
 ```
 
 Expected generated files:
@@ -30,4 +34,4 @@ Expected generated files:
 |---|---|
 | `vlm_eval/vlm_review_template.csv` | VLM/manual reranking worksheet with prompts and blank predictions |
 | `vlm_eval/vlm_hybrid_results.jsonl` | Merged eval rows, including VLM predictions after scoring |
-| `vlm_eval/vlm_hybrid_metrics.json` | Transformer top-1, top-5 coverage, and VLM rerank accuracy |
+| `vlm_eval/vlm_hybrid_metrics.json` | CNN top-1, CNN top-5 coverage, and VLM rerank accuracy |

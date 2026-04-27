@@ -1,0 +1,9 @@
+{
+  "samples": 36,
+  "classes": 22,
+  "cnn_top1": 0.25,
+  "cnn_top5": 0.5833,
+  "vlm_accuracy": 0.25,
+  "vlm_failures": 0,
+  "output_path": "C:\\Users\\ofrai\\OneDrive\\Documents\\BridgeLink-ASL\\outputs\\vlm_compare_local_fixed.jsonl"
+}

@@ -32,6 +32,24 @@ def test_model_builds():
     assert logits.shape == (2, 10), f"Expected (2, 10), got {logits.shape}"
 
 
+def test_cnn_model_builds():
+    """The landmark CNN can be instantiated and produce logits."""
+    from bridgelink_asl.inference import _build_model
+    import torch
+
+    config = {
+        "model_type": "landmark_cnn",
+        "num_classes": 10,
+        "feat_dim": 225,
+        "channels": [32, 64, 64],
+        "dropout": 0.1,
+    }
+    model = _build_model(config)
+    x = torch.randn(2, 32, 225)
+    logits = model(x)
+    assert logits.shape == (2, 10), f"Expected (2, 10), got {logits.shape}"
+
+
 def test_extract_landmarks_from_frame():
     """Landmark extraction returns a 225-d vector from a dummy frame."""
     if importlib.util.find_spec("mediapipe") is None:

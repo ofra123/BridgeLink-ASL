@@ -18,7 +18,7 @@
 \def\confName{CVPR}
 \def\confYear{2024}
 
-\title{BridgeLink ASL: Real-Time Word-Level American Sign Language\\ Recognition with Landmark Transformers}
+\title{BridgeLink ASL: CNN and Vision-Language Model Comparison\\ for Word-Level American Sign Language Recognition}
 
 \author{%
 Dalen Gordon \quad Ervin Gordon III \quad Frank Garcia \quad Omar Fraij \\
@@ -38,12 +38,14 @@ captioning services. We present \textbf{BridgeLink ASL}, a real-time system for
 word-level American Sign Language (ASL) recognition that runs on a standard
 consumer laptop and a free Hugging Face Space. Our approach decomposes the
 problem into (i) pose and hand landmark extraction using MediaPipe Holistic and
-(ii) temporal classification with a lightweight Transformer encoder. Training on
-the WLASL-100 subset, our 1.3M-parameter model reaches TODO\% top-1 and TODO\%
-top-5 accuracy on the held-out test set while running at interactive rates on
-CPU. We deploy the model in a Gradio application that accepts both live webcam
-streams and uploaded clips, and synthesizes the recognized signs as speech.
-Code, trained weights, and dataset artifacts are publicly released.
+(ii) temporal classification with a lightweight temporal convolutional neural
+network (CNN). We compare this trained CNN against a zero-shot vision-language
+model (VLM) reranking workflow in which the VLM chooses from the CNN's top-5
+candidate labels. Training on the WLASL-100 subset, our CNN reaches TODO\% top-1
+and TODO\% top-5 accuracy on the held-out test set, and the VLM reranker reaches
+TODO\% accuracy on a WLASL-25 held-out evaluation set. We keep a Transformer
+encoder as an additional attention-based experiment, but the primary comparison
+is CNN versus VLM-assisted reranking.
 \end{abstract}
 
 % -----------------------------------------------------------------------------
@@ -69,13 +71,14 @@ final system live in a classroom.
 Our contributions are:
 \begin{itemize}
     \item A complete, reproducible pipeline for WLASL-100 word-level ASL
-    recognition using MediaPipe Holistic landmarks and a small Transformer
-    encoder, trainable end-to-end in under an hour on a single free-tier GPU.
+    recognition using MediaPipe Holistic landmarks and a lightweight temporal
+    CNN, trainable end-to-end on a single free-tier GPU.
     \item A Gradio-based Hugging Face Space that serves the model with both
     live webcam streaming and uploaded-clip inference, including sliding-window
     temporal smoothing and text-to-speech output.
-    \item An ablation of temporal augmentation strategies and a per-class
-    performance analysis on the WLASL-100 test split.
+    \item A CNN versus VLM comparison: the CNN provides top-5 sign candidates,
+    and a pretrained VLM reranks those candidates from the original video clip
+    without task-specific VLM fine-tuning.
 \end{itemize}
 
 % -----------------------------------------------------------------------------
@@ -100,11 +103,6 @@ al.~\cite{camgoz2020signtransformer} introduced the Sign Language Transformer
 for joint recognition and translation on continuous sign. Although our task
 scope is word-level, we borrow the basic idea of treating per-frame features
 as a sequence and applying a Transformer encoder with a classification token.
-
-\paragraph{Continuous sign language translation.} How2Sign~\cite{duarte2021how2sign}
-is a large continuous sign language translation corpus; we considered it as a
-primary dataset but determined that sentence-level seq2seq translation was out
-of scope for the course timeline and selected WLASL-100 instead.
 
 % Replace the citation keys in references.bib. Five papers = 1 per team member.
 
@@ -162,8 +160,9 @@ signs or occlusion) are represented as zero vectors.
 \label{sec:method}
 
 \paragraph{Overview.} Our pipeline has three stages: (i) per-frame landmark
-extraction, (ii) sequence-level classification with a Transformer encoder, and
-(iii) temporal smoothing at inference time for the live demo.
+extraction, (ii) sequence-level classification with a temporal CNN, and
+(iii) temporal smoothing at inference time for the live demo. A Transformer
+encoder is retained as an optional attention-based extension.
 
 \paragraph{Landmark extraction.} We use MediaPipe Holistic as a frozen
 self-supervised feature extractor. MediaPipe Holistic is trained on large
@@ -174,17 +173,21 @@ benefits: the input representation is compact, invariant to background and
 lighting, and the downstream model is small enough to train quickly and run
 live on CPU.
 
-\paragraph{Sign Transformer.} The landmark sequence $\mathbf{X} \in
-\mathbb{R}^{T \times 225}$ is linearly projected to $\mathbb{R}^{T \times d}$
-with $d = 192$. A learned classification token is prepended, a learned
-positional embedding is added, and the result is passed through a 4-layer
-pre-norm Transformer encoder with 4 attention heads, GELU activation, and a
-feed-forward dimension of $4d$. The CLS-token output is layer-normalized and
-projected to class logits. The full model has 1.3M parameters.
+\paragraph{Landmark CNN.} The landmark sequence $\mathbf{X} \in
+\mathbb{R}^{T \times 225}$ is transposed into a channel-first representation
+and passed through a temporal 1D CNN. The CNN uses batch normalization,
+three convolutional blocks, ReLU activations, dropout, max pooling, and global
+average pooling before a linear classification head. This model is the primary
+trained classifier for the CNN-versus-VLM comparison.
 
-\paragraph{Loss and optimization.} We train with cross-entropy loss with label
-smoothing of 0.1, using the AdamW optimizer with learning rate $3 \times
-10^{-4}$, weight decay $10^{-2}$, and a cosine annealing schedule over 60
+\paragraph{Optional Transformer.} To address the attention/modern-methods
+portion of the rubric, we also train an optional Transformer encoder on the
+same MediaPipe landmark tensors. This model is reported as an extension rather
+than the primary professor-facing comparison.
+
+\paragraph{Loss and optimization.} We train the CNN with cross-entropy loss
+with label smoothing of 0.1, using the AdamW optimizer with learning rate
+$10^{-3}$, weight decay $10^{-2}$, and a cosine annealing schedule over 50
 epochs. We clip gradients at a max norm of 1.0 and use a batch size of 64.
 
 \paragraph{Augmentation.} To combat the relatively small dataset size we apply
@@ -217,14 +220,15 @@ deployed as a Hugging Face Space using Gradio.
 split, which assigns each clip to exactly one split by video ID and is
 signer-disjoint across splits.
 
-\paragraph{Baseline.} For reference we report the centroid baseline included
-in the BridgeLink ASL starter repository, which computes a class mean over
-landmark sequences and classifies at inference time by nearest centroid. This
-baseline is $O(1)$ training time and provides a lower bound on what the
-landmark representation can achieve without temporal modeling.
+\paragraph{Baseline and comparison.} The primary trained model is a temporal
+landmark CNN. We compare it against a pretrained VLM used in zero-shot reranking
+mode. The VLM is not fine-tuned; instead, it receives the original clip and the
+CNN's top-5 candidate labels and selects the best label from that constrained
+set. The optional Transformer result is reported separately as an attention
+extension.
 
 \paragraph{Results.} \Cref{tab:main} reports top-1 and top-5 accuracy on the
-WLASL-100 test split for the baseline and the Sign Transformer.
+WLASL-100 test split for the CNN and optional Transformer.
 \Cref{fig:trainingcurves} shows training loss and validation accuracy over
 epochs. \Cref{fig:confmat} shows the confusion matrix on the test split. We
 observe that TODO (qualitative observations once you have real numbers ---
@@ -238,12 +242,14 @@ which augmentations helped most, etc.).
 \toprule
 Model & Top-1 Acc. & Top-5 Acc. \\
 \midrule
-Centroid baseline (landmarks)     & TODO & TODO \\
-Sign Transformer (ours)           & \textbf{TODO} & \textbf{TODO} \\
+Landmark CNN (ours)               & \textbf{TODO} & \textbf{TODO} \\
+VLM reranker on CNN top-5          & TODO & -- \\
+Optional Transformer               & TODO & TODO \\
 \bottomrule
 \end{tabular}
-\caption{WLASL-100 test accuracy. Our 1.3M-parameter Transformer substantially
-outperforms the centroid baseline while remaining small enough to run on CPU.}
+\caption{Primary CNN versus VLM comparison. The VLM is evaluated as a
+zero-shot reranker over the CNN's top-5 candidates rather than as a fine-tuned
+classifier.}
 \label{tab:main}
 \end{table}
 
@@ -279,8 +285,8 @@ training distribution.
 \label{sec:conclusion}
 
 We presented BridgeLink ASL, a practical real-time word-level ASL recognition
-system built from MediaPipe Holistic landmarks and a small Transformer
-encoder. The full pipeline trains in under an hour on a free GPU and runs
+system built from MediaPipe Holistic landmarks and a lightweight CNN, with an
+additional zero-shot VLM reranking comparison. The full pipeline trains in under an hour on a free GPU and runs
 live on CPU in a hosted Hugging Face Space. We hope the system and its
 accompanying code serve as a useful starting point for students building
 accessibility tools in computer vision courses.

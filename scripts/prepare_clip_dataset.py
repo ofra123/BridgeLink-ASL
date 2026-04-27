@@ -17,8 +17,8 @@ from bridgelink_asl.project_assets import build_dataset_summary  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Prepare and validate a How2Sign subset manifest.")
-    parser.add_argument("--manifest", default="data/processed/how2sign_subset.jsonl")
+    parser = argparse.ArgumentParser(description="Prepare and validate a BridgeLink clip manifest.")
+    parser.add_argument("--manifest", default="data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl")
     parser.add_argument("--summary-output", default="results/dataset-summary.json")
     parser.add_argument("--require-frames", action="store_true")
     parser.add_argument("--extract-frames", action="store_true", help="Extract sampled frames from local video paths.")
@@ -56,14 +56,22 @@ def _extract_frames_to_manifest(
     except ImportError as exc:
         raise RuntimeError("OpenCV is required for frame extraction. Install opencv-python-headless.") from exc
 
+    manifest_path = manifest_path.expanduser().resolve()
+    output_manifest = output_manifest.expanduser().resolve()
+    frame_root = frame_root.expanduser().resolve()
+
     updated_rows: list[dict[str, object]] = []
     for payload in _read_jsonl(manifest_path):
         clip_id = str(payload["clip_id"])
-        video_path = Path(str(payload.get("video_path", "")))
+        video_path = Path(str(payload.get("video_path", ""))).expanduser()
+        if not video_path.is_absolute():
+            video_path = (manifest_path.parent / video_path).resolve()
+        else:
+            video_path = video_path.resolve()
         if video_path.exists():
             clip_frame_dir = frame_root / clip_id
             sampled = _sample_video_frames(cv2, video_path, clip_frame_dir, frame_count)
-            payload["sampled_frames"] = [str(path).replace("\\", "/") for path in sampled]
+            payload["sampled_frames"] = [path.resolve().as_posix() for path in sampled]
             payload["notes"] = str(payload.get("notes", "")).strip() + " Sampled frames extracted."
         else:
             payload["notes"] = str(payload.get("notes", "")).strip() + " Video file missing during extraction."

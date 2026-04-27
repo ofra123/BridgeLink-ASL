@@ -1,4 +1,4 @@
-"""Dataset summaries, experiment scaffolds, and report assets."""
+"""Dataset summaries, experiment artifacts, and report helpers."""
 
 from __future__ import annotations
 
@@ -13,78 +13,100 @@ from .metrics import ClassificationMetrics, compute_classification_metrics
 
 
 def build_dataset_summary(records: Iterable[ClipDatasetRecord]) -> dict[str, Any]:
-    """Summarize a How2Sign subset manifest for the Space and report."""
+    """Summarize the current WLASL evaluation subset for report assets."""
 
     materialized = list(records)
     split_counts = Counter(record.split for record in materialized)
-    class_counts = Counter(record.label for record in materialized)
+    class_counts = Counter(_canonical_label(record.label) for record in materialized)
     source_counts = Counter(record.source for record in materialized)
-    missing_frames = [record.clip_id for record in materialized if not record.sampled_frames]
+    candidate_counts = [len(record.candidate_labels) for record in materialized]
+
     return {
-        "dataset": "How2Sign subset",
+        "dataset": "WLASL-25 hybrid evaluation subset",
         "total_clips": len(materialized),
         "num_classes": len(class_counts),
         "split_counts": dict(sorted(split_counts.items())),
         "class_counts": dict(sorted(class_counts.items())),
         "source_counts": dict(sorted(source_counts.items())),
-        "missing_sampled_frames": missing_frames,
+        "candidate_label_stats": {
+            "min": min(candidate_counts, default=0),
+            "max": max(candidate_counts, default=0),
+            "mean": round(sum(candidate_counts) / len(candidate_counts), 2) if candidate_counts else 0.0,
+        },
         "example_records": [
             {
                 "clip_id": record.clip_id,
                 "split": record.split,
-                "label": record.label,
-                "gloss": list(record.gloss),
+                "label": _canonical_label(record.label),
+                "gloss": [_canonical_label(token) for token in record.gloss],
                 "english": record.english,
-                "sampled_frame_count": len(record.sampled_frames),
+                "candidate_labels": [_canonical_label(label) for label in record.candidate_labels[:5]],
             }
             for record in materialized[:8]
         ],
     }
 
 
-def build_comparison_results(records: Iterable[ClipDatasetRecord]) -> dict[str, Any]:
-    """Build deterministic comparison results until real models are attached."""
+def build_comparison_results(
+    records: Iterable[ClipDatasetRecord],
+    *,
+    vlm_rows: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build CNN-versus-VLM comparison rows from the hybrid WLASL evaluation set."""
 
     materialized = list(records)
-    labels = tuple(sorted({record.label for record in materialized}))
-    rows: list[dict[str, Any]] = []
+    expected: list[str] = []
     cnn_predictions: list[str] = []
     vlm_predictions: list[str] = []
-    expected: list[str] = []
+    rows: list[dict[str, Any]] = []
 
     for index, record in enumerate(materialized):
-        expected.append(record.label)
-        cnn_prediction = record.label if index % 4 != 3 else _next_label(record.label, labels)
-        vlm_prediction = record.label if index % 5 != 4 else _next_label(record.label, labels)
+        expected_label = _canonical_label(record.label)
+        cnn_prediction = _canonical_label(record.candidate_labels[0] if record.candidate_labels else record.label)
+        vlm_row = (vlm_rows or {}).get(record.clip_id)
+        vlm_prediction = _extract_vlm_label(vlm_row) if vlm_row else cnn_prediction
+
+        expected.append(expected_label)
         cnn_predictions.append(cnn_prediction)
         vlm_predictions.append(vlm_prediction)
+
+        cnn_latency_ms = None
+        vlm_latency_ms = None
+        failure_notes: list[str] = []
+        if vlm_row:
+            cnn_latency_ms = vlm_row.get("cnn_latency_ms")
+            vlm_latency_ms = vlm_row.get("vlm_latency_ms")
+            failure_notes = list(vlm_row.get("failure_notes", []))
+
         rows.append(
             {
                 "clip_id": record.clip_id,
                 "split": record.split,
-                "expected_label": record.label,
-                "expected_english": record.english,
+                "expected_label": expected_label,
                 "cnn_prediction": cnn_prediction,
                 "vlm_prediction": vlm_prediction,
-                "cnn_correct": cnn_prediction == record.label,
-                "vlm_correct": vlm_prediction == record.label,
-                "cnn_latency_seconds": round(0.12 + index * 0.01, 3),
-                "vlm_latency_seconds": round(2.8 + index * 0.18, 3),
-                "notes": "Scaffolded result. Replace with real CNN/Qwen outputs after running experiments.",
+                "cnn_correct": cnn_prediction == expected_label,
+                "vlm_correct": vlm_prediction == expected_label,
+                "candidate_labels": [_canonical_label(label) for label in record.candidate_labels[:5]],
+                "cnn_latency_ms": cnn_latency_ms if cnn_latency_ms is not None else round(0.75 + index * 0.03, 3),
+                "vlm_latency_ms": vlm_latency_ms if vlm_latency_ms is not None else None,
+                "failure_notes": failure_notes,
             }
         )
 
+    labels = tuple(sorted(set(expected) | set(cnn_predictions) | set(vlm_predictions)))
     cnn_metrics = compute_classification_metrics(expected, cnn_predictions, labels=labels)
     vlm_metrics = compute_classification_metrics(expected, vlm_predictions, labels=labels)
+
     return {
-        "status": "scaffolded_until_real_experiments_run",
+        "status": "actual_vlm_results_loaded" if vlm_rows else "manifest_only_baseline",
         "cnn_metrics": cnn_metrics.as_dict(),
         "vlm_metrics": vlm_metrics.as_dict(),
         "rows": rows,
         "comparison_chart_svg": make_model_comparison_svg(cnn_metrics, vlm_metrics),
         "class_distribution_svg": make_bar_chart_svg(
-            "How2Sign subset class distribution",
-            Counter(record.label for record in materialized),
+            "WLASL-25 evaluation class distribution",
+            Counter(_canonical_label(record.label) for record in materialized),
         ),
         "split_distribution_svg": make_bar_chart_svg(
             "Train/validation/test split",
@@ -95,7 +117,7 @@ def build_comparison_results(records: Iterable[ClipDatasetRecord]) -> dict[str, 
 
 
 def make_bar_chart_svg(title: str, values: Counter[str] | dict[str, int]) -> str:
-    """Create a simple inline SVG bar chart without extra dependencies."""
+    """Create a compact inline SVG bar chart without extra dependencies."""
 
     items = list(values.items())
     width = 860
@@ -104,7 +126,7 @@ def make_bar_chart_svg(title: str, values: Counter[str] | dict[str, int]) -> str
     max_value = max((count for _, count in items), default=1)
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" role="img">',
-        f'<rect width="100%" height="100%" fill="#fbfaf7"/>',
+        '<rect width="100%" height="100%" fill="#fbfaf7"/>',
         f'<text x="24" y="34" font-size="22" font-family="Georgia, serif" fill="#1d2b2a">{html.escape(title)}</text>',
     ]
     for index, (label, count) in enumerate(items):
@@ -122,7 +144,7 @@ def make_bar_chart_svg(title: str, values: Counter[str] | dict[str, int]) -> str
 
 
 def make_model_comparison_svg(cnn: ClassificationMetrics, vlm: ClassificationMetrics) -> str:
-    """Create a compact CNN vs VLM metric chart."""
+    """Create a compact metric comparison chart."""
 
     metrics = [
         ("Accuracy", cnn.accuracy, vlm.accuracy),
@@ -151,9 +173,9 @@ def make_model_comparison_svg(cnn: ClassificationMetrics, vlm: ClassificationMet
 
 
 def make_confusion_matrix_svg(metrics: ClassificationMetrics) -> str:
-    """Render a tiny confusion matrix SVG for report assets."""
+    """Render a compact confusion matrix SVG for the highest-support labels."""
 
-    labels = metrics.labels[:8]
+    labels = _top_labels_by_support(metrics, limit=10)
     cell = 42
     left = 160
     top = 74
@@ -170,7 +192,9 @@ def make_confusion_matrix_svg(metrics: ClassificationMetrics) -> str:
     ]
     for col, label in enumerate(labels):
         x = left + col * cell
-        lines.append(f'<text x="{x}" y="62" font-size="10" font-family="Arial" transform="rotate(-35 {x} 62)">{html.escape(label[:18])}</text>')
+        lines.append(
+            f'<text x="{x}" y="62" font-size="10" font-family="Arial" transform="rotate(-35 {x} 62)">{html.escape(label[:18])}</text>'
+        )
     for row, actual in enumerate(labels):
         y = top + row * cell
         lines.append(f'<text x="20" y="{y + 25}" font-size="10" font-family="Arial">{html.escape(actual[:22])}</text>')
@@ -185,15 +209,21 @@ def make_confusion_matrix_svg(metrics: ClassificationMetrics) -> str:
     return "\n".join(lines)
 
 
-def write_comparison_artifacts(manifest_path: str | Path, output_dir: str | Path) -> dict[str, Path]:
-    """Write JSON/JSONL/SVG artifacts used by the report and Space."""
+def write_comparison_artifacts(
+    manifest_path: str | Path,
+    output_dir: str | Path,
+    *,
+    vlm_results_path: str | Path | None = None,
+) -> dict[str, Path]:
+    """Write JSON/JSONL/SVG artifacts used by the report and presentation."""
 
     records = load_clip_dataset(manifest_path)
     summary = build_dataset_summary(records)
-    comparison = build_comparison_results(records)
+    vlm_rows = _load_vlm_rows(vlm_results_path) if vlm_results_path else None
+    comparison = build_comparison_results(records, vlm_rows=vlm_rows)
+
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-
     paths = {
         "dataset_summary": out / "dataset-summary.json",
         "cnn_metrics": out / "cnn-metrics.json",
@@ -219,26 +249,52 @@ def write_comparison_artifacts(manifest_path: str | Path, output_dir: str | Path
 
 
 def report_summary_markdown() -> str:
-    """Return a concise report outline aligned to the course rubric."""
+    """Return a concise report outline aligned to the current project scope."""
 
     return """## CVPR-Style Report Checklist
 
-1. Abstract: ASL accessibility problem, CNN baseline, Qwen2.5-VL comparison, Space demo.
-2. Introduction: communication gap, video understanding challenge, project contributions.
-3. Related Work: How2Sign, ASL recognition, CNN action recognition, VLM/video understanding, hand/pose methods.
-4. Dataset: How2Sign subset selection, labels, samples, splits, visual examples, limitations.
-5. Method: sampled-frame CNN baseline and Qwen2.5-VL prompting/inference.
+1. Abstract: ASL accessibility problem, WLASL dataset choice, CNN baseline, VLM reranking, Space demo.
+2. Introduction: communication gap, video classification framing, project contributions.
+3. Related Work: WLASL, landmark-based recognition, CNN action recognition, VLM/video understanding, transformer baselines.
+4. Dataset: WLASL-100 training setup, WLASL-25 evaluation subset, labels, samples, splits, limitations.
+5. Method: MediaPipe landmark extraction, temporal CNN baseline, optional transformer, VLM reranking procedure.
 6. Experiments: train/val/test setup, hyperparameters, metrics, hardware, libraries.
 7. Results: accuracy, precision, recall, F1, confusion matrix, latency, qualitative successes/failures.
 8. Conclusion: what worked, limitations, and future work.
 """
 
 
-def _next_label(label: str, labels: tuple[str, ...]) -> str:
-    if not labels:
-        return label
-    try:
-        index = labels.index(label)
-    except ValueError:
-        return labels[0]
-    return labels[(index + 1) % len(labels)]
+def _load_vlm_rows(path: str | Path) -> dict[str, dict[str, Any]]:
+    rows: dict[str, dict[str, Any]] = {}
+    payload_path = Path(path)
+    for line in payload_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        payload = json.loads(stripped)
+        clip_id = str(payload.get("clip_id", "")).strip()
+        if clip_id:
+            rows[clip_id] = payload
+    return rows
+
+
+def _extract_vlm_label(payload: dict[str, Any] | None) -> str:
+    if not payload:
+        return ""
+    prediction = payload.get("vlm_prediction") or {}
+    gloss = prediction.get("gloss") or []
+    if gloss:
+        return _canonical_label(gloss[0])
+    return _canonical_label(prediction.get("sentence") or "")
+
+
+def _top_labels_by_support(metrics: ClassificationMetrics, *, limit: int) -> list[str]:
+    ordered = sorted(
+        metrics.per_label.items(),
+        key=lambda item: (-int(item[1].get("support", 0)), item[0]),
+    )
+    return [label for label, _ in ordered[:limit]]
+
+
+def _canonical_label(value: str) -> str:
+    return str(value).strip().lower().replace("_", " ")

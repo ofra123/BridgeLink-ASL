@@ -1,77 +1,123 @@
 # Final Project Workflow
 
-This workflow assumes the project uses a small How2Sign subset for the final experiment and Hugging Face Space for the final proof-of-concept demo.
+This branch makes the final professor-facing comparison explicit:
 
-## 1. Create The How2Sign Subset Manifest
-
-Download How2Sign metadata/videos outside Git, then create a BridgeLink manifest:
-
-```powershell
-python scripts/create_how2sign_subset.py `
-  --metadata C:\path\to\how2sign_train.csv C:\path\to\how2sign_val.csv C:\path\to\how2sign_test.csv `
-  --video-root data/raw/how2sign `
-  --output data/processed/how2sign_subset.jsonl `
-  --max-per-split 40
+```text
+trained landmark CNN vs zero-shot VLM reranking
 ```
 
-The manifest contains clip IDs, split labels, English targets, generated sentence labels, local video paths, and sampled frame paths.
+The Transformer remains in the notebook as an optional attention/extra-credit
+experiment, not the main comparison.
 
-## 2. Extract Frames And Validate The Dataset
+## 1. Train From The Colab Notebook
 
-After the videos exist locally:
+Use `notebooks/train_wlasl100_colab.ipynb`.
 
-```powershell
-python scripts/prepare_clip_dataset.py `
-  --manifest data/processed/how2sign_subset.jsonl `
-  --extract-frames `
-  --frame-count 16 `
-  --output-manifest data/processed/how2sign_subset.jsonl `
-  --summary-output results/dataset-summary.json
+The notebook expects:
+
+```text
+/content/drive/MyDrive/BridgeLink-ASL/data/wlasl-processed.zip
 ```
 
-Then validate the manifest:
+Run the notebook top-to-bottom. If landmarks are already extracted, Step 7 is
+cached and should report mostly `Cached` samples instead of redoing the slow
+MediaPipe pass.
 
-```powershell
-python scripts/prepare_clip_dataset.py `
-  --manifest data/processed/how2sign_subset.jsonl `
-  --require-frames
+## 2. Primary CNN Outputs
+
+The CNN section saves:
+
+```text
+/content/drive/MyDrive/BridgeLink-ASL/models/cnn_landmark_best.pt
+/content/drive/MyDrive/BridgeLink-ASL/results/cnn_metrics.json
+/content/drive/MyDrive/BridgeLink-ASL/results/cnn_training_curves.png
+/content/drive/MyDrive/BridgeLink-ASL/results/cnn_confusion_matrix.png
+/content/drive/MyDrive/BridgeLink-ASL/results/cnn_classification_report.txt
 ```
 
-## 3. Train The CNN Baseline
+These are the main model artifacts for the report.
 
-```powershell
-pip install -e ".[training]"
-train_cnn_model `
-  --clips data/processed/how2sign_subset.jsonl `
-  --output models/cnn-baseline.keras `
-  --epochs 12 `
-  --batch-size 4 `
-  --frame-count 16
+## 3. Optional Transformer Outputs
+
+The Transformer cells are kept after the CNN section. Run them only if time
+allows and report them as an attention-based extension.
+
+```text
+/content/drive/MyDrive/BridgeLink-ASL/models/sign_transformer_best.pt
+/content/drive/MyDrive/BridgeLink-ASL/results/metrics.json
 ```
 
-The CNN architecture, loss, optimizer, learning rate, frame count, and batch size are documented in the README and `docs/model-comparison.md`.
+## 4. Build The CNN/VLM Eval Set
 
-## 4. Run CNN vs VLM Evaluation
+## 4. Train The Smaller Live Demo CNN
 
-Until real CNN/Qwen outputs are connected, generate scaffolded report assets:
+The notebook also trains a smaller WLASL-25 checkpoint for the live demo:
 
-```powershell
-python scripts/generate_project_results.py `
-  --manifest data/processed/how2sign_subset.jsonl `
-  --output-dir results
+```text
+/content/drive/MyDrive/BridgeLink-ASL/models/cnn_landmark_wlasl25_best.pt
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_metrics.json
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_training_curves.png
+/content/drive/MyDrive/BridgeLink-ASL/results/demo_wlasl25_confusion_matrix.png
 ```
 
-After real model inference is available, replace the scaffolded predictions with actual CNN and Qwen2.5-VL outputs while keeping the same JSON/JSONL artifact names.
+Use this checkpoint for Hugging Face Space because it is much more likely to
+behave well live than the full 100-class model.
 
-## 5. Use The Space As The Final Dashboard
+## 5. Build The CNN/VLM Eval Set
 
-The Hugging Face Space displays:
+The CNN/VLM notebook cell creates:
 
-- live upload/webcam demo
-- How2Sign subset summary
-- class and split charts
-- CNN vs VLM metrics
-- confusion matrix
-- CVPR report checklist
+```text
+/content/drive/MyDrive/BridgeLink-ASL/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
+/content/drive/MyDrive/BridgeLink-ASL/vlm_eval_wlasl25_cnn/clips/
+```
 
-This makes the Space the demo and project dashboard, while the report contains the formal technical explanation and results.
+Each row includes the true label, clip path, CNN top-1, CNN top-5 candidates,
+and a constrained prompt for the VLM.
+
+## 6. Score The VLM Reranker
+
+Copy the eval folder into:
+
+```text
+data/vlm_eval_wlasl25_cnn/
+```
+
+Generate the review sheet and baseline metrics:
+
+```powershell
+python scripts/evaluate_hybrid_vlm.py `
+  --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl `
+  --output-dir results/vlm_eval
+```
+
+Fill `results/vlm_eval/vlm_review_template.csv` with VLM choices, then rescore:
+
+```powershell
+python scripts/evaluate_hybrid_vlm.py `
+  --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl `
+  --predictions results/vlm_eval/vlm_review_template.csv `
+  --output-dir results/vlm_eval
+```
+
+Report:
+
+```text
+CNN top-1 accuracy
+CNN top-5 coverage
+VLM-reranked top-5 accuracy
+```
+
+## 7. Deploy The Space
+
+Upload `cnn_landmark_best.pt` to a Hugging Face model repo and set Space
+variables:
+
+```text
+HF_MODEL_REPO=<username>/<model-repo>
+HF_MODEL_FILENAME=cnn_landmark_wlasl25_best.pt
+```
+
+The Space can still load `sign_transformer_best.pt` if you set
+`HF_MODEL_FILENAME=sign_transformer_best.pt`, but the final demo should use the
+WLASL-25 CNN checkpoint unless the professor asks for the Transformer extension.

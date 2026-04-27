@@ -17,6 +17,28 @@ PREDICTION_KEYS = (
     "prediction",
 )
 
+CANDIDATE_TOP1_KEYS = (
+    "cnn_top1",
+    "model_top1",
+    "candidate_top1",
+    "transformer_top1",
+)
+
+CANDIDATE_TOP1_CONFIDENCE_KEYS = (
+    "cnn_top1_confidence",
+    "model_top1_confidence",
+    "candidate_top1_confidence",
+    "transformer_top1_confidence",
+)
+
+CANDIDATE_TOP5_KEYS = (
+    "cnn_top5",
+    "model_top5",
+    "candidate_top5",
+    "transformer_top5",
+    "top5",
+)
+
 
 def load_jsonl(path: str | Path) -> list[dict[str, object]]:
     """Load newline-delimited JSON rows."""
@@ -53,10 +75,57 @@ def normalize_label(label: object) -> str:
     return str(label or "").strip().lower().replace("_", " ")
 
 
-def transformer_top5_labels(row: dict[str, object]) -> list[str]:
+def candidate_model_name(row: dict[str, object]) -> str:
+    """Infer which model generated the top-5 candidate list."""
+
+    if row.get("candidate_model"):
+        return str(row["candidate_model"])
+    if row.get("cnn_top1") or row.get("cnn_top5"):
+        return "cnn"
+    if row.get("transformer_top1") or row.get("transformer_top5"):
+        return "transformer"
+    return "candidate_model"
+
+
+def candidate_top1_label(row: dict[str, object]) -> str:
+    """Extract the candidate generator's top-1 label."""
+
+    for key in CANDIDATE_TOP1_KEYS:
+        value = row.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    labels = _top5_labels_without_top1_fallback(row)
+    return labels[0] if labels else ""
+
+
+def candidate_top1_confidence(row: dict[str, object]) -> object:
+    """Extract the candidate generator's top-1 confidence when present."""
+
+    for key in CANDIDATE_TOP1_CONFIDENCE_KEYS:
+        value = row.get(key)
+        if value is not None:
+            return value
+    return ""
+
+
+def candidate_top5_labels(row: dict[str, object]) -> list[str]:
     """Extract top-5 candidate labels from a hybrid evaluation row."""
 
-    raw_top5 = row.get("transformer_top5") or row.get("top5") or []
+    labels = _top5_labels_without_top1_fallback(row)
+    if not labels:
+        top1 = candidate_top1_label(row)
+        if top1:
+            labels.append(top1)
+    return labels
+
+
+def _top5_labels_without_top1_fallback(row: dict[str, object]) -> list[str]:
+    raw_top5: object = []
+    for key in CANDIDATE_TOP5_KEYS:
+        value = row.get(key)
+        if value:
+            raw_top5 = value
+            break
     labels: list[str] = []
     if isinstance(raw_top5, list):
         for item in raw_top5:
@@ -66,9 +135,13 @@ def transformer_top5_labels(row: dict[str, object]) -> list[str]:
                 label = item
             if label is not None:
                 labels.append(str(label))
-    if not labels and row.get("transformer_top1"):
-        labels.append(str(row["transformer_top1"]))
     return labels
+
+
+def transformer_top5_labels(row: dict[str, object]) -> list[str]:
+    """Backward-compatible alias for older tests and manifests."""
+
+    return candidate_top5_labels(row)
 
 
 def get_vlm_prediction(row: dict[str, object]) -> str | None:
@@ -86,7 +159,7 @@ def build_vlm_prompt(row: dict[str, object]) -> str:
 
     if row.get("vlm_prompt"):
         return str(row["vlm_prompt"])
-    candidates = transformer_top5_labels(row)
+    candidates = candidate_top5_labels(row)
     return (
         "You are classifying an isolated ASL sign from a short video. "
         f"Choose the best matching label from this candidate list only: {candidates}. "
@@ -99,9 +172,10 @@ def compute_hybrid_metrics(rows: Iterable[dict[str, object]]) -> dict[str, objec
 
     materialized = list(rows)
     true_labels = [str(row.get("true_label", "")) for row in materialized]
-    transformer_top1 = [str(row.get("transformer_top1", "")) for row in materialized]
-    transformer_top5_hits = [
-        normalize_label(actual) in {normalize_label(label) for label in transformer_top5_labels(row)}
+    candidate_model = candidate_model_name(materialized[0]) if materialized else "candidate_model"
+    candidate_top1 = [candidate_top1_label(row) for row in materialized]
+    candidate_top5_hits = [
+        normalize_label(actual) in {normalize_label(label) for label in candidate_top5_labels(row)}
         for actual, row in zip(true_labels, materialized)
     ]
 
@@ -114,23 +188,32 @@ def compute_hybrid_metrics(rows: Iterable[dict[str, object]]) -> dict[str, objec
         expected_vlm.append(str(row.get("true_label", "")))
         predicted_vlm.append(prediction)
 
-    transformer_metrics = compute_classification_metrics(
+    candidate_metrics = compute_classification_metrics(
         [normalize_label(label) for label in true_labels],
-        [normalize_label(label) for label in transformer_top1],
+        [normalize_label(label) for label in candidate_top1],
     )
 
     result: dict[str, object] = {
         "num_samples": len(materialized),
         "num_classes": len({normalize_label(label) for label in true_labels if label}),
-        "transformer_top1_accuracy": transformer_metrics.accuracy,
-        "transformer_top5_coverage": round(
-            sum(transformer_top5_hits) / len(transformer_top5_hits), 4
+        "candidate_model": candidate_model,
+        "candidate_top1_accuracy": candidate_metrics.accuracy,
+        "candidate_top5_coverage": round(
+            sum(candidate_top5_hits) / len(candidate_top5_hits), 4
         )
-        if transformer_top5_hits
+        if candidate_top5_hits
         else 0.0,
-        "transformer_top1_metrics": transformer_metrics.as_dict(),
+        "candidate_top1_metrics": candidate_metrics.as_dict(),
         "vlm_evaluated_samples": len(predicted_vlm),
     }
+    # Backward-compatible names retained for existing report scripts.
+    result["transformer_top1_accuracy"] = result["candidate_top1_accuracy"]
+    result["transformer_top5_coverage"] = result["candidate_top5_coverage"]
+    result["transformer_top1_metrics"] = result["candidate_top1_metrics"]
+    if "cnn" in candidate_model.lower():
+        result["cnn_top1_accuracy"] = result["candidate_top1_accuracy"]
+        result["cnn_top5_coverage"] = result["candidate_top5_coverage"]
+        result["cnn_top1_metrics"] = result["candidate_top1_metrics"]
 
     if predicted_vlm:
         vlm_metrics = compute_classification_metrics(
@@ -155,9 +238,10 @@ def write_review_csv(rows: Iterable[dict[str, object]], path: str | Path) -> Non
         "video_id",
         "true_label",
         "video_path",
-        "transformer_top1",
-        "transformer_top1_confidence",
-        "transformer_top5_labels",
+        "candidate_model",
+        "candidate_top1",
+        "candidate_top1_confidence",
+        "candidate_top5_labels",
         "vlm_prompt",
         "vlm_prediction",
         "notes",
@@ -171,12 +255,11 @@ def write_review_csv(rows: Iterable[dict[str, object]], path: str | Path) -> Non
                     "video_id": row.get("video_id", ""),
                     "true_label": row.get("true_label", ""),
                     "video_path": row.get("video_path", ""),
-                    "transformer_top1": row.get("transformer_top1", ""),
-                    "transformer_top1_confidence": row.get(
-                        "transformer_top1_confidence", ""
-                    ),
-                    "transformer_top5_labels": json.dumps(
-                        transformer_top5_labels(row), ensure_ascii=False
+                    "candidate_model": candidate_model_name(row),
+                    "candidate_top1": candidate_top1_label(row),
+                    "candidate_top1_confidence": candidate_top1_confidence(row),
+                    "candidate_top5_labels": json.dumps(
+                        candidate_top5_labels(row), ensure_ascii=False
                     ),
                     "vlm_prompt": build_vlm_prompt(row),
                     "vlm_prediction": get_vlm_prediction(row) or "",

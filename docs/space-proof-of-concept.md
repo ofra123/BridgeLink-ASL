@@ -2,37 +2,33 @@
 
 ## Feasibility
 
-Yes, BridgeLink ASL can run as a proof of concept on Hugging Face Spaces.
+Yes, BridgeLink ASL runs as a proof of concept on Hugging Face Spaces.
 
-The hosted final product should be scoped as:
+The hosted final product is scoped as:
 
 - browser UI with upload and webcam-recorded clips
-- CNN-style baseline output
-- VLM-style sentence output
-- side-by-side comparison, confidence, latency, and limitations
-- reliable fallback behavior when no GPU model is attached
+- landmark CNN output
+- live tracking overlay
+- confidence-aware captioning
+- reliable fallback behavior when webcam or model input is weak
 
-The full research-grade version still needs:
+The full research workflow still lives partly off-Space:
 
-- real How2Sign subset clip data and sampled frame paths
-- a trained CNN artifact from those frames
-- real Qwen2.5-VL runtime on GPU hardware or precomputed VLM outputs
-- final benchmark metrics exported to `results/`
+- WLASL training and landmark extraction are done locally or in Colab/Kaggle
+- local Qwen2.5-VL reranking is used for comparison experiments
+- only the CNN demo path is expected to be practical on a free CPU Space
 
 ## What Runs Now
 
-The Space branch now has an end-to-end hosted PoC:
+The Space hosts an end-to-end CNN demo:
 
 ```text
 upload/webcam clip
--> OpenCV video feature extraction
--> CNN-style hosted baseline
--> VLM-style grounded sentence output
--> comparison report
--> final sentence / speech-ready text
+-> MediaPipe landmark extraction
+-> temporal CNN inference
+-> smoothing and caption output
+-> presentation-ready demo UI
 ```
-
-If OpenCV cannot read the video, the app falls back to file metadata instead of crashing. If no video is provided, the app returns a safe demo sentence and reports that fallback state.
 
 ## Why This Counts As A PoC
 
@@ -40,27 +36,17 @@ The app proves the final user flow:
 
 - a user can record a live webcam clip in the browser
 - the system accepts the clip
-- the system runs both comparison branches
-- the system returns a sentence-level output
-- the system exposes model status, confidence, latency, and limitations
+- the system runs the trained CNN branch
+- the system returns a word-level ASL prediction
+- the system exposes model status and a tracking overlay
 
-It does not yet prove model accuracy. Accuracy requires real data, real training, and real Qwen inference.
-
-## Hosted Model Strategy
-
-The default VLM target remains:
-
-```text
-Qwen/Qwen2.5-VL-32B-Instruct-AWQ
-```
-
-This is still large. For a free or CPU Space, keep the current grounded mock VLM. For a GPU Space, replace the mock VLM function with a real Qwen provider while preserving the same JSON output contract.
+Accuracy claims come from the offline WLASL experiments and the local VLM
+comparison workflow rather than from the Space itself.
 
 ## Demo Script
 
 1. Open the Space.
-2. Choose `Run Demo` or `Webcam Only`.
-3. Record a 2-5 second signing clip.
-4. Select `Compare`.
-5. Click `Run BridgeLink ASL`.
-6. Explain that the hosted PoC proves the pipeline and UI; the next milestone replaces the fallback CNN/VLM branches with trained/runtime models.
+2. Test `Upload / Record Clip` first.
+3. Then test `Live Webcam`.
+4. Show the overlay, candidate label, and caption output.
+5. Explain that the Space is the live CNN demo surface, while the VLM comparison runs offline.

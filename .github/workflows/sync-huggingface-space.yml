@@ -3,6 +3,7 @@ name: Sync Hugging Face Space
 on:
   push:
     branches:
+      - main
       - codex/hugging-face-space
   workflow_dispatch:
 
@@ -10,10 +11,8 @@ jobs:
   sync-space:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out Space branch
+      - name: Check out source branch
         uses: actions/checkout@v4
-        with:
-          ref: codex/hugging-face-space
 
       - name: Sync to Hugging Face Space
         uses: huggingface/hub-sync@v0.1.0
