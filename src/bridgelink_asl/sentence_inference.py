@@ -135,7 +135,7 @@ class SentenceClipRuntime:
 
 
 def load_sentence_runtime(
-    local_model_path: str | Path = "models/cnn-3d-sentence-top25.keras",
+    local_model_path: str | Path = "models/cnn-3d-sentence-top25-normalized.keras",
     *,
     local_labels_path: str | Path | None = None,
     hf_repo: str | None = None,

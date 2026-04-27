@@ -73,7 +73,32 @@ python scripts\create_how2sign_sentence_manifest.py `
   --max-samples-per-class 60
 ```
 
-## 2. Extract sampled frames from each clip
+## 2. Normalize duplicate sentence labels
+
+Before frame extraction, we can optionally merge obvious duplicate /
+near-duplicate sentence labels. This keeps the same clips but makes the
+closed-vocabulary task less noisy.
+
+Current conservative merges:
+
+- `Hi!` + `Hi.` -> `Hi.`
+- `O.k.` + `Okay.` + `Okay?` -> `Okay.`
+- `Alright.` + `All right.` -> `All right.`
+
+Run:
+
+```powershell
+python scripts\normalize_how2sign_sentence_manifest.py `
+  --input data\processed\how2sign_sentences_top25.jsonl `
+  --output data\processed\how2sign_sentences_top25.normalized.jsonl `
+  --summary-output results\how2sign_top25_normalization_summary.json
+```
+
+This preserves the same clip count while reducing duplicate classes. In the
+current `top25` experiment, it reduced the label space from `25` classes to
+`21` classes while keeping all `479` clips.
+
+## 3. Extract sampled frames from each clip
 
 Run:
 
@@ -89,7 +114,19 @@ python scripts\prepare_clip_dataset.py `
 
 This updates the manifest with sampled frame paths and writes a dataset summary.
 
-## 3. Dry-run the 3D CNN plan
+If you are using the normalized `top25` path, run:
+
+```powershell
+python scripts\prepare_clip_dataset.py `
+  --manifest data\processed\how2sign_sentences_top25.normalized.jsonl `
+  --extract-frames `
+  --frame-count 16 `
+  --frame-root data\interim\frames\how2sign_top25 `
+  --output-manifest data\processed\how2sign_sentences_top25.normalized.frames.jsonl `
+  --summary-output results\how2sign_top25_dataset_summary.json
+```
+
+## 4. Dry-run the 3D CNN plan
 
 Run:
 
@@ -105,7 +142,15 @@ You should see:
 - train / val / test counts
 - number of sentence classes
 
-## 4. Install TensorFlow training extras
+For the normalized `top25` experiment, use:
+
+```powershell
+train_cnn_model `
+  --clips data\processed\how2sign_sentences_top25.normalized.frames.jsonl `
+  --dry-run
+```
+
+## 5. Install TensorFlow training extras
 
 Run:
 
@@ -113,7 +158,7 @@ Run:
 python -m pip install -e ".[training]"
 ```
 
-## 5. Train the 3D CNN
+## 6. Train the 3D CNN
 
 Run:
 
@@ -134,10 +179,24 @@ models/cnn-3d-sentence.keras
 models/cnn-3d-sentence.labels.json
 ```
 
+For the normalized `top25` experiment, use:
+
+```powershell
+train_cnn_model `
+  --clips data\processed\how2sign_sentences_top25.normalized.frames.jsonl `
+  --output models\cnn-3d-sentence-top25-normalized.keras `
+  --epochs 20 `
+  --batch-size 2 `
+  --frame-count 16 `
+  --image-size 112
+```
+
 ## Notes
 
 - This training path is heavier than the WLASL landmark CNN.
 - Start with the top 10-12 repeated sentence classes before expanding.
+- Label normalization is the safest first improvement because it does not
+  require changing the 3D CNN architecture.
 - If memory is tight, reduce:
   - `--batch-size` to `1`
   - `--image-size` to `96`

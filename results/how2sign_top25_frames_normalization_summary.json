@@ -1,0 +1,74 @@
+{
+  "total_rows": 479,
+  "changed_rows": 121,
+  "classes_before": 25,
+  "classes_after": 21,
+  "label_counts_before": {
+    "All right.": 9,
+    "Alright.": 12,
+    "And one, two and three, four.": 9,
+    "Drop.": 8,
+    "Exhale.": 11,
+    "Good.": 60,
+    "Hello!": 14,
+    "Here we go.": 8,
+    "Hi!": 60,
+    "Hi.": 27,
+    "Inhale.": 9,
+    "Just like that.": 12,
+    "Lift.": 17,
+    "O.k.": 17,
+    "Okay.": 43,
+    "Okay?": 32,
+    "One, two, three, four.": 19,
+    "One, two, three.": 14,
+    "Squeeze.": 8,
+    "Step.": 17,
+    "Thank you.": 11,
+    "There we go.": 30,
+    "There you go.": 12,
+    "Very good.": 9,
+    "Yes.": 11
+  },
+  "label_counts_after": {
+    "All right.": 21,
+    "And one, two and three, four.": 9,
+    "Drop.": 8,
+    "Exhale.": 11,
+    "Good.": 60,
+    "Hello!": 14,
+    "Here we go.": 8,
+    "Hi.": 87,
+    "Inhale.": 9,
+    "Just like that.": 12,
+    "Lift.": 17,
+    "Okay.": 92,
+    "One, two, three, four.": 19,
+    "One, two, three.": 14,
+    "Squeeze.": 8,
+    "Step.": 17,
+    "Thank you.": 11,
+    "There we go.": 30,
+    "There you go.": 12,
+    "Very good.": 9,
+    "Yes.": 11
+  },
+  "merged_groups": {
+    "All right.": [
+      "All right.",
+      "Alright."
+    ],
+    "Hi.": [
+      "Hi!",
+      "Hi."
+    ],
+    "Okay.": [
+      "O.k.",
+      "Okay.",
+      "Okay?"
+    ]
+  },
+  "input_manifest": "C:\\Users\\ofrai\\OneDrive\\Documents\\BridgeLink-ASL\\data\\processed\\how2sign_sentences_top25.frames.jsonl",
+  "output_manifest": "C:\\Users\\ofrai\\OneDrive\\Documents\\BridgeLink-ASL\\data\\processed\\how2sign_sentences_top25.normalized.frames.jsonl",
+  "strategy": "conservative"
+}
