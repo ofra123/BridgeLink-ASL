@@ -36,6 +36,8 @@ TOP12_MANIFEST = PROJECT_ROOT / "data" / "processed" / "how2sign_sentences_top12
 TOP25_MANIFEST = PROJECT_ROOT / "data" / "processed" / "how2sign_sentences_top25.frames.jsonl"
 TOP12_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence.keras"
 TOP25_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25.keras"
+TOP25_E30_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25-e30.keras"
+TOP25_WEIGHTED_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25-weighted.keras"
 
 BACKGROUND = "#F7F4EE"
 TEXT = "#18222F"
@@ -67,6 +69,15 @@ class BenchmarkStat:
     test_loss: float
 
 
+@dataclass(frozen=True)
+class ExperimentStat:
+    name: str
+    training_change: str
+    val_accuracy: float
+    test_accuracy: float
+    test_loss: float
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     configure_matplotlib()
@@ -77,11 +88,13 @@ def main() -> None:
         build_benchmark_stat("Top-12 subset", TOP12_SUMMARY, TOP12_MANIFEST, TOP12_MODEL),
         build_benchmark_stat("Top-25 subset", TOP25_SUMMARY, TOP25_MANIFEST, TOP25_MODEL),
     ]
+    experiment_stats = collect_experiment_stats()
 
-    write_summary_json(threshold_stats, benchmark_stats)
+    write_summary_json(threshold_stats, benchmark_stats, experiment_stats)
     plot_dataset_constraint(threshold_stats)
     plot_subset_benchmark(benchmark_stats)
     plot_top25_class_distribution(top25_summary)
+    plot_top25_experiment_comparison(experiment_stats)
     print(f"Generated matplotlib presentation plots in: {OUTPUT_DIR}")
 
 
@@ -169,6 +182,28 @@ def build_benchmark_stat(name: str, summary_path: Path, manifest_path: Path, mod
         val_loss=val_loss,
         test_loss=test_loss,
     )
+
+
+def collect_experiment_stats() -> list[ExperimentStat]:
+    experiments = [
+        ("Top-25 best", "baseline checkpoint", TOP25_MODEL),
+        ("Top-25 continued", "18 more epochs", TOP25_E30_MODEL),
+        ("Top-25 weighted", "balanced class weights", TOP25_WEIGHTED_MODEL),
+    ]
+    stats: list[ExperimentStat] = []
+    for name, training_change, model_path in experiments:
+        val_loss, val_accuracy = evaluate_saved_clip_cnn(TOP25_MANIFEST, model_path, split="val")
+        test_loss, test_accuracy = evaluate_saved_clip_cnn(TOP25_MANIFEST, model_path, split="test")
+        stats.append(
+            ExperimentStat(
+                name=name,
+                training_change=training_change,
+                val_accuracy=val_accuracy,
+                test_accuracy=test_accuracy,
+                test_loss=test_loss,
+            )
+        )
+    return stats
 
 
 def evaluate_saved_clip_cnn(manifest_path: Path, model_path: Path, *, split: str) -> tuple[float, float]:
@@ -350,6 +385,65 @@ def plot_top25_class_distribution(summary: dict[str, object]) -> None:
     save_plot(fig, "how2sign_top25_class_distribution")
 
 
+def plot_top25_experiment_comparison(stats: list[ExperimentStat]) -> None:
+    names = [stat.name for stat in stats]
+    x_positions = list(range(len(stats)))
+    width = 0.34
+
+    fig, ax = plt.subplots(figsize=(12, 6), constrained_layout=True)
+    fig.suptitle(
+        "3D CNN Training Experiments",
+        fontsize=20,
+        fontweight="bold",
+        color=TEXT,
+    )
+
+    val_bars = ax.bar(
+        [position - width / 2 for position in x_positions],
+        [stat.val_accuracy for stat in stats],
+        width=width,
+        color=ACCENT_SOFT,
+        label="Val accuracy",
+    )
+    test_bars = ax.bar(
+        [position + width / 2 for position in x_positions],
+        [stat.test_accuracy for stat in stats],
+        width=width,
+        color=ACCENT_ALT,
+        label="Test accuracy",
+    )
+    ax.set_xticks(x_positions, names)
+    ax.set_ylabel("Accuracy")
+    ax.set_ylim(0.0, max(max(stat.val_accuracy, stat.test_accuracy) for stat in stats) * 1.35)
+    ax.yaxis.set_major_formatter(FuncFormatter(format_percent))
+    ax.set_title("The original Top-25 checkpoint remains the strongest model")
+    ax.legend(frameon=False)
+    annotate_patch_values(ax, val_bars, percent=True)
+    annotate_patch_values(ax, test_bars, percent=True)
+
+    for index, stat in enumerate(stats):
+        ax.text(
+            index,
+            -0.055,
+            stat.training_change,
+            ha="center",
+            va="top",
+            fontsize=9,
+            color=MUTED,
+            transform=ax.get_xaxis_transform(),
+        )
+
+    fig.text(
+        0.5,
+        -0.03,
+        "More epochs and balanced class weighting did not improve held-out accuracy, so label structure is the next likely bottleneck.",
+        ha="center",
+        fontsize=11,
+        color=MUTED,
+    )
+    save_plot(fig, "how2sign_top25_experiment_comparison")
+
+
 def annotate_bars(axis, values: list[int], scale: str, *, percent: bool) -> None:
     for patch, value in zip(axis.patches, values):
         height = patch.get_height()
@@ -410,10 +504,15 @@ def save_plot(fig, basename: str) -> None:
     plt.close(fig)
 
 
-def write_summary_json(threshold_stats: list[ThresholdStat], benchmark_stats: list[BenchmarkStat]) -> None:
+def write_summary_json(
+    threshold_stats: list[ThresholdStat],
+    benchmark_stats: list[BenchmarkStat],
+    experiment_stats: list[ExperimentStat],
+) -> None:
     payload = {
         "threshold_stats": [asdict(stat) for stat in threshold_stats],
         "benchmark_stats": [asdict(stat) for stat in benchmark_stats],
+        "experiment_stats": [asdict(stat) for stat in experiment_stats],
     }
     (OUTPUT_DIR / "how2sign_plot_metrics.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 

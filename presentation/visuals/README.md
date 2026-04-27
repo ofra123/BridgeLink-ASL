@@ -11,6 +11,7 @@ Generated slide-ready visuals for BridgeLink ASL.
 - `how2sign_dataset_constraint.(png|svg)`: explains why the full 31k How2Sign clips cannot be used as sentence classes
 - `how2sign_subset_benchmark.(png|svg)`: Top-12 versus Top-25 benchmark growth and accuracy
 - `how2sign_top25_class_distribution.(png|svg)`: class imbalance view for the current Top-25 subset
+- `how2sign_top25_experiment_comparison.(png|svg)`: comparison of the Top-25 baseline, continued training, and balanced-weight experiments
 - `how2sign_plot_metrics.json`: source values used by the matplotlib How2Sign plots
 
 ## Current values

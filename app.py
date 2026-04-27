@@ -51,7 +51,8 @@ SENTENCE_MODEL_FILENAME = os.environ.get("HF_SENTENCE_MODEL_FILENAME", "cnn-3d-s
 LOCAL_SENTENCE_WEIGHTS = PROJECT_ROOT / "models" / SENTENCE_MODEL_FILENAME
 SEQ_LEN = 32
 STRIDE = 4                     # run inference every STRIDE frames
-MIN_CONFIDENCE = 0.35          # below this, show nothing
+MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_MIN_CONFIDENCE", "0.55"))
+SENTENCE_MIN_CONFIDENCE = float(os.environ.get("BRIDGELINK_SENTENCE_MIN_CONFIDENCE", "0.55"))
 STABILITY_K = 2                # require K consecutive same predictions before emitting
 
 RUNTIME: SignLanguageRuntime | None = None
@@ -144,11 +145,11 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
         sequence = np.stack(list(state["buffer"]))   # (32, 225)
         label, confidence, top5 = runtime.predict(sequence)
         state["last_inference_ms"] = round((time.perf_counter() - t0) * 1000, 1)
-        state["candidate_label"] = label
         state["candidate_confidence"] = confidence
-        state["candidate_top5"] = top5
 
         if confidence >= MIN_CONFIDENCE:
+            state["candidate_label"] = label
+            state["candidate_top5"] = top5
             if label == state["last_label"]:
                 state["stable_count"] += 1
             else:
@@ -163,6 +164,10 @@ def on_live_frame(frame: np.ndarray, state: dict[str, Any]):
                     state["history"].append(label)
                     state["history"] = state["history"][-12:]  # keep last 12
                     state["caption"] = _format_caption(state["history"])
+        else:
+            state["candidate_label"] = None
+            state["candidate_top5"] = []
+            state["stable_count"] = 0
 
     tracking_overlay = draw_tracking_overlay(
         frame,
@@ -198,6 +203,30 @@ def _status_markdown(state: dict[str, Any]) -> str:
     )
 
 
+def _format_caption(history: list[str]) -> str:
+    if not history:
+        return "_Waiting for a confident sign..._"
+    words = [w.replace("_", " ").title() for w in history]
+    return "**" + " / ".join(words) + "**"
+
+
+def _status_markdown(state: dict[str, Any]) -> str:
+    caption = state.get("caption") or "_Waiting for a confident sign..._"
+    last_label = state.get("candidate_label") or "Waiting"
+    confidence = state.get("candidate_confidence")
+    confidence_text = f"{confidence:.1%}" if confidence is not None else "--"
+    infer = state.get("last_inference_ms", 0.0)
+    buf = len(state["buffer"]) if state.get("buffer") is not None else 0
+    return (
+        f"### Caption\n\n{caption}\n\n"
+        f"- Confirmed candidate: **{last_label}**\n"
+        f"- Confidence gate: **{MIN_CONFIDENCE:.0%}**\n"
+        f"- Latest confidence: **{confidence_text}**\n"
+        f"- Buffer: {buf}/{SEQ_LEN} frames\n"
+        f"- Last inference: {infer} ms"
+    )
+
+
 def reset_live() -> tuple[dict[str, Any], str]:
     state = init_live_state()
     return state, _status_markdown(state)
@@ -223,6 +252,24 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
     label, confidence, top5 = runtime.predict(sequence)
     infer_ms = round((time.perf_counter() - t0) * 1000, 1)
 
+    if confidence < MIN_CONFIDENCE:
+        details = {
+            "raw_label": label,
+            "accepted_label": None,
+            "confidence": confidence,
+            "confidence_gate": MIN_CONFIDENCE,
+            "top5": [{"label": n, "score": s} for n, s in top5],
+            "extract_ms": extract_ms,
+            "inference_ms": infer_ms,
+            "sequence_shape": list(sequence.shape),
+        }
+        return (
+            "## No Confident Sign Yet\n\n"
+            f"Highest confidence: **{confidence:.1%}**\n\n"
+            f"Confidence gate: **{MIN_CONFIDENCE:.0%}**",
+            details,
+        )
+
     lines = [
         f"## Prediction: **{label.replace('_', ' ').title()}**",
         f"Confidence: **{confidence:.1%}**",
@@ -234,8 +281,10 @@ def classify_clip(video_path: str | None) -> tuple[str, dict[str, Any]]:
     lines += ["", f"Landmark extraction: {extract_ms} ms · Inference: {infer_ms} ms"]
 
     details = {
-        "label": label,
+        "raw_label": label,
+        "accepted_label": label,
         "confidence": confidence,
+        "confidence_gate": MIN_CONFIDENCE,
         "top5": [{"label": n, "score": s} for n, s in top5],
         "extract_ms": extract_ms,
         "inference_ms": infer_ms,
@@ -265,8 +314,37 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
     label, confidence, top5 = runtime.predict_clip(clip_volume)
     infer_ms = round((time.perf_counter() - t0) * 1000, 1)
 
+    if confidence < SENTENCE_MIN_CONFIDENCE:
+        details = {
+            "raw_label": label,
+            "accepted_label": None,
+            "confidence": confidence,
+            "confidence_gate": SENTENCE_MIN_CONFIDENCE,
+            "top5": [{"label": name, "score": score} for name, score in top5],
+            "extract_ms": extract_ms,
+            "inference_ms": infer_ms,
+            "clip_shape": list(clip_volume.shape),
+            "frame_count": runtime.frame_count,
+            "image_size": runtime.image_size,
+            **clip_meta,
+        }
+        lines = [
+            "## No Confident Sentence Yet",
+            "",
+            "The clip was processed, but the model did not clear the display threshold.",
+            "",
+            f"Highest confidence: **{confidence:.1%}**",
+            f"Confidence gate: **{SENTENCE_MIN_CONFIDENCE:.0%}**",
+            "",
+            f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
+            f"Preprocess: {extract_ms} ms / Inference: {infer_ms} ms",
+        ]
+        return "\n".join(lines), details
+
     lines = [
-        f"## Sentence Prediction: **{label}**",
+        "## Confident Sentence",
+        "",
+        f"# {label}",
         f"Confidence: **{confidence:.1%}**",
         "",
         "### Top 5 Sentences",
@@ -282,8 +360,10 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
     ]
 
     details = {
-        "label": label,
+        "raw_label": label,
+        "accepted_label": label,
         "confidence": confidence,
+        "confidence_gate": SENTENCE_MIN_CONFIDENCE,
         "top5": [{"label": name, "score": score} for name, score in top5],
         "extract_ms": extract_ms,
         "inference_ms": infer_ms,

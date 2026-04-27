@@ -61,5 +61,28 @@
       "val_loss": 2.953240394592285,
       "test_loss": 2.8787331581115723
     }
+  ],
+  "experiment_stats": [
+    {
+      "name": "Top-25 best",
+      "training_change": "baseline checkpoint",
+      "val_accuracy": 0.2083333283662796,
+      "test_accuracy": 0.2083333283662796,
+      "test_loss": 2.8787331581115723
+    },
+    {
+      "name": "Top-25 continued",
+      "training_change": "18 more epochs",
+      "val_accuracy": 0.1944444477558136,
+      "test_accuracy": 0.1805555522441864,
+      "test_loss": 2.882232904434204
+    },
+    {
+      "name": "Top-25 weighted",
+      "training_change": "balanced class weights",
+      "val_accuracy": 0.1388888955116272,
+      "test_accuracy": 0.1388888955116272,
+      "test_loss": 3.084449291229248
+    }
   ]
 }
