@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
+from bridgelink_asl import cnn as cnn_module
 from bridgelink_asl.clip_dataset import load_clip_dataset, validate_clip_dataset
 from bridgelink_asl.cnn import (
     CnnModelConfig,
@@ -166,3 +167,43 @@ class ClipDatasetAndCnnTests(unittest.TestCase):
 
         payload = json.loads(output_manifest.read_text(encoding="utf-8").splitlines()[0])
         self.assertEqual(payload["sampled_frames"], [frame_path.resolve().as_posix()])
+
+    def test_resume_loader_uses_existing_keras_model_when_shapes_match(self) -> None:
+        tmp_root = Path(__file__).resolve().parents[1] / ".tmp-tests"
+        tmp_root.mkdir(parents=True, exist_ok=True)
+        scratch_dir = tmp_root / f"resume-model-{uuid.uuid4().hex}"
+        scratch_dir.mkdir(parents=True, exist_ok=True)
+        resume_path = scratch_dir / "resume.keras"
+        save_path = scratch_dir / "output.keras"
+        resume_path.write_bytes(b"keras")
+
+        fake_model = mock.Mock()
+        fake_model.input_shape = (None, 8, 96, 96, 3)
+        fake_model.output_shape = (None, 4)
+        fake_model.optimizer = object()
+
+        fake_tf = mock.Mock()
+        fake_tf.keras.models.load_model.return_value = fake_model
+
+        with mock.patch.object(cnn_module, "_require_tensorflow", return_value=fake_tf):
+            loaded_model = cnn_module._load_or_build_clip_cnn_model(
+                num_classes=4,
+                config=CnnModelConfig(frame_count=8, image_size=96),
+                save_path=save_path,
+                resume_path=resume_path,
+            )
+
+        self.assertIs(loaded_model, fake_model)
+        fake_tf.keras.models.load_model.assert_called_once_with(resume_path)
+
+    def test_build_class_weights_balances_underrepresented_labels(self) -> None:
+        records = [
+            mock.Mock(label="A"),
+            mock.Mock(label="A"),
+            mock.Mock(label="A"),
+            mock.Mock(label="B"),
+        ]
+
+        weights = cnn_module._build_class_weights(records, {"A": 0, "B": 1}, "balanced")
+
+        self.assertEqual(weights, {0: 4 / (2 * 3), 1: 4 / (2 * 1)})

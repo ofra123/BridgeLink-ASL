@@ -22,6 +22,7 @@ class CnnModelConfig:
     learning_rate: float = 0.0003
     dropout: float = 0.4
     conv_filters: tuple[int, ...] = (16, 32, 64)
+    class_weight_mode: str | None = None
     early_stopping_patience: int = 5
     reduce_lr_patience: int = 2
     min_learning_rate: float = 1e-5
@@ -64,6 +65,8 @@ class CnnTrainingSummary:
     labels: tuple[str, ...]
     epochs: int
     split_distribution: dict[str, int]
+    resumed_from: str | None = None
+    class_weight_mode: str | None = None
     best_epoch: int | None = None
     best_val_accuracy: float | None = None
     test_loss: float | None = None
@@ -76,6 +79,8 @@ class CnnTrainingSummary:
             "labels": list(self.labels),
             "epochs": self.epochs,
             "split_distribution": self.split_distribution,
+            "resumed_from": self.resumed_from,
+            "class_weight_mode": self.class_weight_mode,
             "best_epoch": self.best_epoch,
             "best_val_accuracy": self.best_val_accuracy,
             "test_loss": self.test_loss,
@@ -173,6 +178,8 @@ def train_clip_cnn_model(
     manifest_path: str | Path,
     output_path: str | Path | None = None,
     config: CnnModelConfig | None = None,
+    *,
+    resume_from: str | Path | None = None,
 ) -> CnnTrainingSummary:
     """Train the 3D CNN baseline from sampled frame paths in a clip manifest."""
 
@@ -195,9 +202,16 @@ def train_clip_cnn_model(
     val_records = [record for record in records if record.split == "val"]
     test_records = [record for record in records if record.split == "test"]
 
-    model = build_clip_cnn_model(num_classes=len(plan.labels), config=active_config)
     save_path = Path(output_path or active_config.model_path).expanduser().resolve()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     best_weights_path = save_path.with_name(f"{save_path.stem}.best.weights.h5")
+    resume_path = Path(resume_from).expanduser().resolve() if resume_from else None
+    model = _load_or_build_clip_cnn_model(
+        num_classes=len(plan.labels),
+        config=active_config,
+        save_path=save_path,
+        resume_path=resume_path,
+    )
     train_dataset = _build_tf_dataset(tf, train_records, label_to_index, active_config, shuffle=True)
     val_dataset = _build_tf_dataset(tf, val_records, label_to_index, active_config, shuffle=False) if val_records else None
     test_dataset = _build_tf_dataset(tf, test_records, label_to_index, active_config, shuffle=False) if test_records else None
@@ -205,6 +219,7 @@ def train_clip_cnn_model(
         train_dataset,
         validation_data=val_dataset,
         epochs=active_config.epochs,
+        class_weight=_build_class_weights(train_records, label_to_index, active_config.class_weight_mode),
         callbacks=_build_training_callbacks(tf, active_config, best_weights_path, monitor_validation=val_dataset is not None),
         verbose=1,
     )
@@ -212,7 +227,6 @@ def train_clip_cnn_model(
         model.load_weights(best_weights_path)
         best_weights_path.unlink()
 
-    save_path.parent.mkdir(parents=True, exist_ok=True)
     model.save(save_path)
     label_path = save_path.with_suffix(".labels.json")
     label_path.write_text(json.dumps({"labels": list(plan.labels)}, indent=2), encoding="utf-8")
@@ -239,6 +253,8 @@ def train_clip_cnn_model(
         labels=plan.labels,
         epochs=active_config.epochs,
         split_distribution=plan.split_distribution,
+        resumed_from=str(resume_path) if resume_path is not None else None,
+        class_weight_mode=active_config.class_weight_mode,
         best_epoch=best_epoch,
         best_val_accuracy=best_val_accuracy,
         test_loss=test_loss,
@@ -315,6 +331,70 @@ def _build_training_callbacks(
         )
     )
     return callbacks
+
+
+def _build_class_weights(
+    records: Iterable[ClipDatasetRecord],
+    label_to_index: dict[str, int],
+    mode: str | None,
+) -> dict[int, float] | None:
+    if mode is None:
+        return None
+    if mode != "balanced":
+        raise ValueError(f"Unsupported class weight mode: {mode}")
+
+    counts: dict[int, int] = {}
+    for record in records:
+        label_index = label_to_index[record.label]
+        counts[label_index] = counts.get(label_index, 0) + 1
+
+    if not counts:
+        return None
+
+    total = sum(counts.values())
+    class_count = len(counts)
+    return {
+        label_index: total / (class_count * count)
+        for label_index, count in counts.items()
+    }
+
+
+def _load_or_build_clip_cnn_model(
+    *,
+    num_classes: int,
+    config: CnnModelConfig,
+    save_path: Path,
+    resume_path: Path | None,
+):
+    if resume_path is None:
+        return build_clip_cnn_model(num_classes=num_classes, config=config)
+
+    if not resume_path.exists():
+        raise ValueError(f"Resume checkpoint does not exist: {resume_path}")
+
+    tf = _require_tensorflow()
+    model = tf.keras.models.load_model(resume_path)
+    expected_input_shape = (None, *config.input_shape)
+    if tuple(model.input_shape) != expected_input_shape:
+        raise ValueError(
+            "Resume checkpoint input shape does not match requested config: "
+            f"{tuple(model.input_shape)} != {expected_input_shape}"
+        )
+    if tuple(model.output_shape) != (None, num_classes):
+        raise ValueError(
+            "Resume checkpoint output classes do not match manifest labels: "
+            f"{tuple(model.output_shape)} != {(None, num_classes)}"
+        )
+    if not getattr(model, "optimizer", None):
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=config.learning_rate),
+            loss="sparse_categorical_crossentropy",
+            metrics=["accuracy"],
+        )
+    if resume_path != save_path:
+        # Keep the best checkpoint and final save under the requested output name.
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+    return model
 
 
 def _load_image(tf: Any, path: Any, config: CnnModelConfig):
