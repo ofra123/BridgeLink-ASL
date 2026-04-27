@@ -394,8 +394,54 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         return "Could not decode the clip for the sentence CNN.", dict(clip_meta)
 
     t0 = time.perf_counter()
-    label, confidence, top5 = runtime.predict_clip(clip_volume)
+    retrieval_mode = runtime.embedding_model is not None and runtime.embedding_index is not None
+    retrieval_meta: dict[str, Any] = {}
+    if retrieval_mode:
+        label, confidence, top5, retrieval_meta = runtime.predict_clip_retrieval(clip_volume)
+    else:
+        label, confidence, top5 = runtime.predict_clip(clip_volume)
     infer_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    if retrieval_mode:
+        details = {
+            "raw_label": label,
+            "accepted_label": label,
+            "match_similarity": confidence,
+            "top5": [{"label": name, "score": score} for name, score in top5],
+            "extract_ms": extract_ms,
+            "inference_ms": infer_ms,
+            "clip_shape": list(clip_volume.shape),
+            "frame_count": runtime.frame_count,
+            "image_size": runtime.image_size,
+            "runtime_model_path": runtime.model_path,
+            "sentence_inference_mode": runtime.inference_mode,
+            **clip_meta,
+            **retrieval_meta,
+        }
+        lines = [
+            "## Best Sentence Match",
+            "",
+            f"# {label}",
+            f"Nearest training-clip similarity: **{confidence:.3f}**",
+            "",
+            "### Top Sentence Matches",
+        ]
+        for index, (name, score) in enumerate(top5, start=1):
+            lines.append(f"{index}. {name} - similarity {score:.3f}")
+        lines += [
+            "",
+            f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
+            f"Preprocess: {extract_ms} ms / Inference: {infer_ms} ms",
+            f"Inference mode: {runtime.inference_mode}",
+            f"Model path: {runtime.model_path}",
+        ]
+        if runtime.embedding_index is not None and runtime.embedding_index.index_path:
+            lines.append(f"Index path: {runtime.embedding_index.index_path}")
+        lines += [
+            "",
+            "Note: this result comes from the 3D CNN embedding space matched against the repeated-sentence training subset.",
+        ]
+        return "\n".join(lines), details
 
     if confidence < SENTENCE_MIN_CONFIDENCE:
         details = {
@@ -409,6 +455,8 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
             "clip_shape": list(clip_volume.shape),
             "frame_count": runtime.frame_count,
             "image_size": runtime.image_size,
+            "runtime_model_path": runtime.model_path,
+            "sentence_inference_mode": runtime.inference_mode,
             **clip_meta,
         }
         lines = [
@@ -421,6 +469,8 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
             "",
             f"Frames sampled: {clip_meta['sampled_frames']} from {clip_meta['source_frames']} decoded frames",
             f"Preprocess: {extract_ms} ms / Inference: {infer_ms} ms",
+            f"Inference mode: {runtime.inference_mode}",
+            f"Model path: {runtime.model_path}",
         ]
         return "\n".join(lines), details
 
@@ -453,6 +503,8 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         "clip_shape": list(clip_volume.shape),
         "frame_count": runtime.frame_count,
         "image_size": runtime.image_size,
+        "runtime_model_path": runtime.model_path,
+        "sentence_inference_mode": runtime.inference_mode,
         **clip_meta,
     }
     return "\n".join(lines), details
