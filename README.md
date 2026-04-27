@@ -16,12 +16,15 @@ compared against a zero-shot VLM reranking workflow.
 
 ## Demo
 
-The Gradio app supports two modes:
+The Gradio app supports three modes:
 
 - **Live Webcam** — streaming video with a rolling 32-frame sliding window,
   near-real-time sign prediction, and caption display.
 - **Upload / Record Clip** — upload or record a 2–5 second clip, get top-5
   predictions with confidence scores.
+- **How2Sign Sentence CNN** — upload a short RGB clip and classify it with the
+  closed-vocabulary sentence-level 3D CNN trained on repeated How2Sign
+  sentences.
 
 For a full local setup guide, see
 [`docs/local-machine-setup.md`](docs/local-machine-setup.md).
@@ -45,11 +48,23 @@ Open `http://127.0.0.1:7860` in your browser.
 
 ### Hugging Face Space
 
-The same app runs on a free CPU Space. Set the `HF_MODEL_REPO` environment
-variable in Space settings to a HF model repo containing
-`cnn_landmark_wlasl25_best.pt` for the live demo.
-Set `HF_MODEL_FILENAME=sign_transformer_best.pt` only if you want to demo the
-optional Transformer checkpoint instead.
+The same app runs on a free CPU Space.
+
+For the landmark live demo, set:
+
+- `HF_MODEL_REPO` to a HF model repo containing `cnn_landmark_wlasl25_best.pt`
+- optionally `HF_MODEL_FILENAME=sign_transformer_best.pt` if you want to demo
+  the Transformer checkpoint instead
+
+For the How2Sign sentence tab, set:
+
+- `HF_SENTENCE_MODEL_REPO` to a HF model repo containing
+  `cnn-3d-sentence-top25.keras`
+- optionally `HF_SENTENCE_MODEL_FILENAME` if you publish the sentence model
+  under a different filename
+
+If you keep the model artifacts directly in the Space repo under `models/`,
+the app will load them locally without any HF Hub environment variables.
 
 ## Method
 
@@ -133,11 +148,14 @@ app.py                          Gradio Space entrypoint
 requirements.txt                Space / local dependencies
 src/bridgelink_asl/
   inference.py                  CNN/Transformer loader + MediaPipe extraction runtime
+  sentence_inference.py         How2Sign sentence CNN loader + clip preprocessing
   wrapper.py                    Sentence wrapper scaffold for cnn/vlm/compare runs
   (other modules)               Supporting pipeline code
 models/
   cnn_landmark_best.pt          Primary CNN weights (download from Drive after training)
   cnn_landmark_wlasl25_best.pt  Smaller live-demo CNN weights
+  cnn-3d-sentence-top25.keras   How2Sign repeated-sentence 3D CNN weights
+  cnn-3d-sentence-top25.labels.json
   sign_transformer_best.pt      Optional Transformer weights
   labels.json                   Label map
 results/

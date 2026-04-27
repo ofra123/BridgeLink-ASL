@@ -16,6 +16,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", help="Optional JSON config file.")
     parser.add_argument("--clips", help="Path to a sentence clip JSONL manifest.")
     parser.add_argument("--output", help="Where to save the trained CNN model.")
+    parser.add_argument("--resume-from", help="Optional existing Keras model to continue training from.")
+    parser.add_argument(
+        "--class-weight",
+        choices=("balanced",),
+        help="Optional class weighting strategy for imbalanced sentence classes.",
+    )
     parser.add_argument("--epochs", type=int, help="Training epochs.")
     parser.add_argument("--batch-size", type=int, help="Training batch size.")
     parser.add_argument("--frame-count", type=int, help="Number of sampled frames per clip.")
@@ -38,6 +44,7 @@ def main() -> int:
         image_size=args.image_size or app_config.cnn_image_size,
         batch_size=args.batch_size or app_config.cnn_batch_size,
         epochs=args.epochs or app_config.cnn_epochs,
+        class_weight_mode=args.class_weight,
         model_path=Path(app_config.cnn_model_path),
         manifest_path=Path(app_config.clip_manifest_path),
     )
@@ -63,7 +70,12 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
-    summary = train_clip_cnn_model(cnn_config.manifest_path, cnn_config.model_path, cnn_config)
+    summary = train_clip_cnn_model(
+        cnn_config.manifest_path,
+        cnn_config.model_path,
+        cnn_config,
+        resume_from=args.resume_from,
+    )
     print("BridgeLink ASL CNN training complete.")
     print(json.dumps(summary.as_dict(), indent=2))
     return 0
