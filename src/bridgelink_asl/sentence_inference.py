@@ -22,6 +22,7 @@ class SentenceEmbeddingIndex:
     candidate_pool: int = 10
     source_manifest: str | None = None
     index_path: str | None = None
+    support_split: str | None = None
 
     def classify(
         self,
@@ -68,6 +69,7 @@ class SentenceEmbeddingIndex:
             "neighbor_similarities": [float(similarities[int(index)]) for index in vote_nearest],
             "source_manifest": self.source_manifest,
             "index_path": self.index_path,
+            "support_split": self.support_split,
             "top_k": self.top_k,
             "candidate_pool": self.candidate_pool,
         }
@@ -267,6 +269,9 @@ def _load_embedding_index(index_path: str | Path) -> SentenceEmbeddingIndex:
     source_manifest = None
     if "source_manifest" in payload:
         source_manifest = str(payload["source_manifest"].item())
+    support_split = None
+    if "support_split" in payload:
+        support_split = str(payload["support_split"].item())
     top_k = int(payload["top_k"].item()) if "top_k" in payload else 3
     candidate_pool = int(payload["candidate_pool"].item()) if "candidate_pool" in payload else 10
     return SentenceEmbeddingIndex(
@@ -277,6 +282,7 @@ def _load_embedding_index(index_path: str | Path) -> SentenceEmbeddingIndex:
         candidate_pool=candidate_pool,
         source_manifest=source_manifest,
         index_path=str(Path(index_path)),
+        support_split=support_split,
     )
 
 

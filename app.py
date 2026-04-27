@@ -339,7 +339,7 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
             "## Best Sentence Match",
             "",
             f"# {label}",
-            f"Nearest training-clip similarity: **{confidence:.3f}**",
+            f"Nearest support-clip similarity: **{confidence:.3f}**",
             "",
             "### Top Sentence Matches",
         ]
@@ -354,9 +354,12 @@ def classify_sentence_clip(video_path: str | None) -> tuple[str, dict[str, Any]]
         ]
         if runtime.embedding_index is not None and runtime.embedding_index.index_path:
             lines.append(f"Index path: {runtime.embedding_index.index_path}")
+        support_split = getattr(runtime.embedding_index, "support_split", None) if runtime.embedding_index is not None else None
+        if support_split:
+            lines.append(f"Support set: {support_split}")
         lines += [
             "",
-            "Note: this result comes from the 3D CNN embedding space matched against the repeated-sentence training subset.",
+            "Note: this result comes from the 3D CNN embedding space matched against the repeated-sentence reference set.",
         ]
         return "\n".join(lines), details
 
