@@ -120,6 +120,22 @@ Report the three comparison numbers: CNN top-1 accuracy, CNN top-5 coverage,
 and VLM-reranked top-5 accuracy. The Transformer result is kept as an optional
 attention/extra-credit experiment.
 
+## Imported How2Sign VLM Workspace
+
+The teammate Qwen2.5-VL fine-tuning workspace is now included directly in this
+repo under `vlm_hf_space/`.
+
+That folder preserves:
+
+- QLoRA training scripts
+- How2Sign/ASL Citizen prep scripts
+- experiment configs
+- archived baseline vs fine-tuned metrics
+- sample prediction outputs from the Hugging Face Space repo
+
+The original source repo was:
+`https://huggingface.co/spaces/ofraij123/ASL-Video-To-Sentence-Translation`
+
 ## Wrapper Scaffold
 
 The repo also includes a sentence-wrapper CLI for phase-3 style comparisons
@@ -166,6 +182,7 @@ notebooks/
 report/
   main.tex                      CVPR-style project report
   references.bib                Bibliography
+vlm_hf_space/                   Imported Qwen2.5-VL workspace from Hugging Face Space
 docs/                           Architecture notes, phase plans, literature review
 tests/                          Unit tests
 ```

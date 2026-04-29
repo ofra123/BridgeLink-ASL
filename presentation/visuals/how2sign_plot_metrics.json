@@ -34,6 +34,11 @@
       "label": "Top-25 subset",
       "clip_count": 479,
       "class_count": 25
+    },
+    {
+      "label": "Top-25 normalized",
+      "clip_count": 479,
+      "class_count": 21
     }
   ],
   "benchmark_stats": [
@@ -60,6 +65,18 @@
       "test_accuracy": 0.2083333283662796,
       "val_loss": 2.953240394592285,
       "test_loss": 2.8787331581115723
+    },
+    {
+      "name": "Top-25 normalized",
+      "total_clips": 479,
+      "num_classes": 21,
+      "train_clips": 335,
+      "val_clips": 72,
+      "test_clips": 72,
+      "val_accuracy": 0.1944444477558136,
+      "test_accuracy": 0.2777777910232544,
+      "val_loss": 2.7069199085235596,
+      "test_loss": 2.5848894119262695
     }
   ],
   "experiment_stats": [
@@ -69,6 +86,13 @@
       "val_accuracy": 0.2083333283662796,
       "test_accuracy": 0.2083333283662796,
       "test_loss": 2.8787331581115723
+    },
+    {
+      "name": "Top-25 normalized",
+      "training_change": "merged duplicate labels",
+      "val_accuracy": 0.1944444477558136,
+      "test_accuracy": 0.2777777910232544,
+      "test_loss": 2.5848894119262695
     },
     {
       "name": "Top-25 continued",

@@ -21,23 +21,23 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 
-from bridgelink_asl.clip_dataset import load_clip_dataset
+from bridgelink_asl.clip_dataset import load_clip_dataset, summarize_clip_splits
 from bridgelink_asl.cnn import CnnModelConfig, _build_tf_dataset, _require_tensorflow
-from bridgelink_asl.how2sign import _load_translation_rows, _normalize_sentence
 
 
 TRANSLATION_DIR = PROJECT_ROOT / "data" / "raw" / "how2sign" / "translations"
 CLIP_DIR = PROJECT_ROOT / "data" / "raw" / "how2sign" / "clips" / "raw_videos"
 OUTPUT_DIR = PROJECT_ROOT / "presentation" / "visuals"
 
-TOP12_SUMMARY = PROJECT_ROOT / "results" / "how2sign_top12_dataset_summary.json"
-TOP25_SUMMARY = PROJECT_ROOT / "results" / "how2sign_top25_dataset_summary.json"
 TOP12_MANIFEST = PROJECT_ROOT / "data" / "processed" / "how2sign_sentences_top12.frames.jsonl"
 TOP25_MANIFEST = PROJECT_ROOT / "data" / "processed" / "how2sign_sentences_top25.frames.jsonl"
+TOP25_NORMALIZED_MANIFEST = PROJECT_ROOT / "data" / "processed" / "how2sign_sentences_top25.normalized.frames.jsonl"
 TOP12_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence.keras"
 TOP25_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25.keras"
+TOP25_NORMALIZED_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25-normalized.keras"
 TOP25_E30_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25-e30.keras"
 TOP25_WEIGHTED_MODEL = PROJECT_ROOT / "models" / "cnn-3d-sentence-top25-weighted.keras"
+TOP25_NORMALIZATION_SUMMARY = PROJECT_ROOT / "results" / "how2sign_top25_normalization_summary.json"
 
 BACKGROUND = "#F7F4EE"
 TEXT = "#18222F"
@@ -78,15 +78,25 @@ class ExperimentStat:
     test_loss: float
 
 
+BASE_THRESHOLD_STATS = [
+    ThresholdStat(label="All matched clips", clip_count=31047, class_count=30008),
+    ThresholdStat(label="Repeated >= 2", clip_count=1487, class_count=448),
+    ThresholdStat(label="Repeated >= 3", clip_count=769, class_count=89),
+    ThresholdStat(label="Repeated >= 5", clip_count=611, class_count=41),
+    ThresholdStat(label="Repeated >= 8", clip_count=531, class_count=26),
+]
+
+
 def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     configure_matplotlib()
 
     threshold_stats = collect_threshold_stats()
-    top25_summary = load_summary(TOP25_SUMMARY)
+    top25_summary = load_summary(TOP25_NORMALIZATION_SUMMARY)
     benchmark_stats = [
-        build_benchmark_stat("Top-12 subset", TOP12_SUMMARY, TOP12_MANIFEST, TOP12_MODEL),
-        build_benchmark_stat("Top-25 subset", TOP25_SUMMARY, TOP25_MANIFEST, TOP25_MODEL),
+        build_benchmark_stat("Top-12 subset", TOP12_MANIFEST, TOP12_MODEL),
+        build_benchmark_stat("Top-25 subset", TOP25_MANIFEST, TOP25_MODEL),
+        build_benchmark_stat("Top-25 normalized", TOP25_NORMALIZED_MANIFEST, TOP25_NORMALIZED_MODEL),
     ]
     experiment_stats = collect_experiment_stats()
 
@@ -125,20 +135,10 @@ def load_summary(path: Path) -> dict[str, object]:
 
 
 def collect_threshold_stats() -> list[ThresholdStat]:
-    rows = _load_translation_rows(TRANSLATION_DIR.resolve(), CLIP_DIR.resolve())
-    matched_rows = [row for row in rows if row["video_path"] is not None]
-    counts = Counter(_normalize_sentence(str(row["english"])) for row in matched_rows)
-
-    stats = [
-        build_threshold_stat("All matched clips", counts, minimum=1),
-        build_threshold_stat("Repeated >= 2", counts, minimum=2),
-        build_threshold_stat("Repeated >= 3", counts, minimum=3),
-        build_threshold_stat("Repeated >= 5", counts, minimum=5),
-        build_threshold_stat("Repeated >= 8", counts, minimum=8),
-    ]
-
-    top12_summary = load_summary(TOP12_SUMMARY)
-    top25_summary = load_summary(TOP25_SUMMARY)
+    stats = list(BASE_THRESHOLD_STATS)
+    top12_summary = summarize_manifest(TOP12_MANIFEST)
+    top25_summary = summarize_manifest(TOP25_MANIFEST)
+    top25_normalized_summary = summarize_manifest(TOP25_NORMALIZED_MANIFEST)
     stats.extend(
         [
             ThresholdStat(
@@ -151,22 +151,30 @@ def collect_threshold_stats() -> list[ThresholdStat]:
                 clip_count=int(top25_summary["total_clips"]),
                 class_count=int(top25_summary["num_classes"]),
             ),
+            ThresholdStat(
+                label="Top-25 normalized",
+                clip_count=int(top25_normalized_summary["total_clips"]),
+                class_count=int(top25_normalized_summary["num_classes"]),
+            ),
         ]
     )
     return stats
 
 
-def build_threshold_stat(label: str, counts: Counter[str], *, minimum: int) -> ThresholdStat:
-    eligible = [count for count in counts.values() if count >= minimum]
-    return ThresholdStat(
-        label=label,
-        clip_count=sum(eligible),
-        class_count=len(eligible),
-    )
+def summarize_manifest(manifest_path: Path) -> dict[str, object]:
+    records = load_clip_dataset(manifest_path)
+    split_counts = summarize_clip_splits(records)
+    class_counts = Counter(record.label.lower() for record in records)
+    return {
+        "total_clips": len(records),
+        "num_classes": len(class_counts),
+        "split_counts": split_counts,
+        "class_counts": dict(sorted(class_counts.items())),
+    }
 
 
-def build_benchmark_stat(name: str, summary_path: Path, manifest_path: Path, model_path: Path) -> BenchmarkStat:
-    summary = load_summary(summary_path)
+def build_benchmark_stat(name: str, manifest_path: Path, model_path: Path) -> BenchmarkStat:
+    summary = summarize_manifest(manifest_path)
     split_counts = summary["split_counts"]
     val_loss, val_accuracy = evaluate_saved_clip_cnn(manifest_path, model_path, split="val")
     test_loss, test_accuracy = evaluate_saved_clip_cnn(manifest_path, model_path, split="test")
@@ -187,13 +195,15 @@ def build_benchmark_stat(name: str, summary_path: Path, manifest_path: Path, mod
 def collect_experiment_stats() -> list[ExperimentStat]:
     experiments = [
         ("Top-25 best", "baseline checkpoint", TOP25_MODEL),
+        ("Top-25 normalized", "merged duplicate labels", TOP25_NORMALIZED_MODEL),
         ("Top-25 continued", "18 more epochs", TOP25_E30_MODEL),
         ("Top-25 weighted", "balanced class weights", TOP25_WEIGHTED_MODEL),
     ]
     stats: list[ExperimentStat] = []
     for name, training_change, model_path in experiments:
-        val_loss, val_accuracy = evaluate_saved_clip_cnn(TOP25_MANIFEST, model_path, split="val")
-        test_loss, test_accuracy = evaluate_saved_clip_cnn(TOP25_MANIFEST, model_path, split="test")
+        manifest_path = TOP25_NORMALIZED_MANIFEST if model_path == TOP25_NORMALIZED_MODEL else TOP25_MANIFEST
+        val_loss, val_accuracy = evaluate_saved_clip_cnn(manifest_path, model_path, split="val")
+        test_loss, test_accuracy = evaluate_saved_clip_cnn(manifest_path, model_path, split="test")
         stats.append(
             ExperimentStat(
                 name=name,
@@ -236,7 +246,7 @@ def plot_dataset_constraint(stats: list[ThresholdStat]) -> None:
     labels = [stat.label for stat in stats]
     clip_counts = [stat.clip_count for stat in stats]
     class_counts = [stat.class_count for stat in stats]
-    colors = [ACCENT, "#4E79A7", "#59A14F", "#F28E2B", "#E15759", ACCENT_SOFT, ACCENT_ALT]
+    colors = [ACCENT, "#4E79A7", "#59A14F", "#F28E2B", "#E15759", ACCENT_SOFT, ACCENT_ALT, "#A06CD5"]
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 7), constrained_layout=True)
     fig.suptitle(
@@ -345,7 +355,7 @@ def plot_subset_benchmark(stats: list[BenchmarkStat]) -> None:
     fig.text(
         0.5,
         -0.02,
-        "The sentence CNN pipeline is working end to end. Scaling from Top-12 to Top-25 increased both coverage and test accuracy.",
+        "The sentence CNN pipeline is working end to end. Label normalization keeps the same 479 clips, cuts duplicate classes, and improves held-out accuracy.",
         ha="center",
         fontsize=11,
         color=MUTED,
@@ -354,14 +364,14 @@ def plot_subset_benchmark(stats: list[BenchmarkStat]) -> None:
 
 
 def plot_top25_class_distribution(summary: dict[str, object]) -> None:
-    class_counts = summary["class_counts"]
+    class_counts = summary["label_counts_after"]
     items = sorted(class_counts.items(), key=lambda item: item[1], reverse=True)
     labels = [textwrap.fill(label.title(), width=18) for label, _ in items]
     values = [count for _, count in items]
 
     fig, ax = plt.subplots(figsize=(12, 9), constrained_layout=True)
     fig.suptitle(
-        "Top-25 How2Sign Class Distribution",
+        "Normalized Top-25 Class Distribution",
         fontsize=20,
         fontweight="bold",
         color=TEXT,
@@ -371,13 +381,13 @@ def plot_top25_class_distribution(summary: dict[str, object]) -> None:
     ax.invert_yaxis()
     ax.set_xlabel("Clips per sentence class")
     ax.set_ylabel("Sentence label")
-    ax.set_title("The repeated-sentence subset is still imbalanced")
+    ax.set_title("Label normalization helps, but the repeated-sentence subset is still imbalanced")
     annotate_patch_values(ax, bars, percent=False, horizontal=True)
 
     fig.text(
         0.5,
         -0.02,
-        "Classes like 'Good.', 'Hi!', and 'Okay.' dominate the subset, which helps explain why the current benchmark still has head-class bias.",
+        "After merging duplicate labels, classes like 'Okay.', 'Hi.', and 'Good.' still dominate the subset, so head-class bias remains.",
         ha="center",
         fontsize=11,
         color=MUTED,
@@ -416,7 +426,7 @@ def plot_top25_experiment_comparison(stats: list[ExperimentStat]) -> None:
     ax.set_ylabel("Accuracy")
     ax.set_ylim(0.0, max(max(stat.val_accuracy, stat.test_accuracy) for stat in stats) * 1.35)
     ax.yaxis.set_major_formatter(FuncFormatter(format_percent))
-    ax.set_title("The original Top-25 checkpoint remains the strongest model")
+    ax.set_title("The normalized checkpoint is now the strongest 3D CNN model")
     ax.legend(frameon=False)
     annotate_patch_values(ax, val_bars, percent=True)
     annotate_patch_values(ax, test_bars, percent=True)
@@ -436,7 +446,7 @@ def plot_top25_experiment_comparison(stats: list[ExperimentStat]) -> None:
     fig.text(
         0.5,
         -0.03,
-        "More epochs and balanced class weighting did not improve held-out accuracy, so label structure is the next likely bottleneck.",
+        "Merging duplicate sentence labels produced the best held-out result; training longer or reweighting alone was less effective.",
         ha="center",
         fontsize=11,
         color=MUTED,

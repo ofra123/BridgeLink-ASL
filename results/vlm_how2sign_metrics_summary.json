@@ -1,0 +1,22 @@
+{
+  "source_dir": "C:\\Users\\ofrai\\OneDrive\\Documents\\BridgeLink-ASL\\vlm_hf_space\\outputs\\how2sign_qwen25vl_3b_qlora\\archive_500train_eval100",
+  "num_samples": 100,
+  "baseline": {
+    "num_samples": 100,
+    "bleu": 0.13190291190140932,
+    "chrf": 11.964036429797746,
+    "rouge_l": 0.0668393398798282
+  },
+  "finetuned": {
+    "num_samples": 100,
+    "bleu": 1.2645024575524115,
+    "chrf": 14.076603963296414,
+    "rouge_l": 0.10735543170596028
+  },
+  "delta": {
+    "bleu": 1.1326,
+    "chrf": 2.112568,
+    "rouge_l": 0.040516
+  },
+  "figure_path": "C:\\Users\\ofrai\\OneDrive\\Documents\\BridgeLink-ASL\\report\\figures\\vlm_how2sign_metrics.png"
+}
