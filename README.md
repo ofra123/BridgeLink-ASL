@@ -10,26 +10,88 @@ python_version: 3.11
 
 # BridgeLink ASL
 
-Real-time word-level American Sign Language recognition using MediaPipe
-Holistic landmarks and a lightweight CNN classifier, trained on WLASL-100 and
-compared against a zero-shot VLM reranking workflow.
+BridgeLink ASL is a computer vision project for American Sign Language video understanding. The final project compares three paths:
 
-## Demo
+- a word-level landmark CNN for live webcam sign recognition
+- a sentence-level 3D CNN trained on How2Sign RGB clips
+- an imported Qwen2.5-VL workspace for VLM-based sentence translation experiments
+
+## Important clarification
+
+- The final full-sentence classifier in this repo uses **How2Sign**, not WLASL-100.
+- The sentence classifier is a **3D CNN over RGB video frames**, not the older 1D landmark CNN.
+- The landmark CNN remains in the repo only for the **word-level live webcam demo** and isolated-sign experiments.
+- If you are reviewing the final sentence-classification work, the main model to look at is the **How2Sign 3D CNN**.
+
+## What the app does
 
 The Gradio app supports three modes:
 
-- **Live Webcam** — streaming video with a rolling 32-frame sliding window,
-  near-real-time sign prediction, and caption display.
-- **Upload / Record Clip** — upload or record a 2–5 second clip, get top-5
-  predictions with confidence scores.
-- **How2Sign Sentence CNN** — upload a short RGB clip and classify it with the
-  closed-vocabulary sentence-level 3D CNN trained on repeated How2Sign
-  sentences.
+- **Live Webcam** - real-time word-level ASL recognition from MediaPipe Holistic landmarks.
+- **Upload / Record Clip** - upload a short sign clip and run the word-level recognition branch.
+- **How2Sign Sentence CNN** - upload a short RGB sentence clip and classify it with the closed-vocabulary 3D CNN trained on repeated How2Sign sentences.
 
-For a full local setup guide, see
-[`docs/local-machine-setup.md`](docs/local-machine-setup.md).
+For the final class project, the sentence branch is the key contribution because it operates on **full ASL sentence clips**, not still images and not isolated single-sign labels.
 
-### Run locally
+## Final sentence-classification path
+
+The sentence classifier works as follows:
+
+```text
+How2Sign RGB sentence clip
+  -> decode video
+  -> uniformly sample 16 frames
+  -> resize frames to 112 x 112
+  -> stack into a 3D video volume
+  -> Conv3D + BatchNorm + MaxPool blocks
+  -> GlobalAveragePooling3D
+  -> Dense softmax classifier
+  -> best sentence label from the repeated-sentence How2Sign subset
+```
+
+Key details:
+
+- Dataset: **How2Sign**
+- Input: **16 RGB frames per clip**
+- Frame size: **112 x 112**
+- Model family: **3D CNN**
+- Task: **closed-vocabulary sentence classification**
+
+The final best sentence model is the normalized top-25 How2Sign repeated-sentence model, which reduces duplicate punctuation and wording variants into 21 usable sentence classes.
+
+## Dataset summary
+
+### How2Sign sentence data
+
+How2Sign is the dataset used for the sentence classifier. It provides RGB videos aligned to English sentence translations. In this project, the 3D CNN uses short frontal-view RGB sentence clips.
+
+Important limitation:
+
+- The full local How2Sign inventory contains about **31k clips**, but most sentence labels appear only once.
+- Because a standard softmax classifier needs repeated examples per class, the 3D CNN was trained on a **repeated-sentence subset** rather than treating all 31k clips as separate classes.
+- This means the final 3D CNN is a **sentence classifier over repeated sentence labels**, not an open-ended translator over every unique How2Sign sentence.
+
+### WLASL word-level data
+
+WLASL-based data are kept only for the **word-level webcam / isolated-sign branch**. They are **not** the dataset used for the final sentence classifier.
+
+## VLM workspace
+
+The teammate Qwen2.5-VL fine-tuning workspace is included directly in this repo under `vlm_hf_space/`.
+
+That folder preserves:
+
+- QLoRA training scripts
+- How2Sign and ASL Citizen data-prep scripts
+- experiment configs
+- archived baseline vs fine-tuned metrics
+- sample prediction outputs from the Hugging Face Space repo
+
+Original source:
+
+`https://huggingface.co/spaces/ofraij123/ASL-Video-To-Sentence-Translation`
+
+## Run locally
 
 ```bash
 py -3.11 -m venv .venv
@@ -40,161 +102,101 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 python -m pip install -e .
-set HF_MODEL_FILENAME=cnn_landmark_wlasl25_best.pt
 python app.py
 ```
 
 Open `http://127.0.0.1:7860` in your browser.
 
-### Hugging Face Space
+## Hugging Face Space configuration
 
-The same app runs on a free CPU Space.
+For the word-level live demo:
 
-For the landmark live demo, set:
+- `HF_MODEL_REPO` should point to a model repo containing `cnn_landmark_wlasl25_best.pt`
+- optionally set `HF_MODEL_FILENAME` if you publish that model under a different name
 
-- `HF_MODEL_REPO` to a HF model repo containing `cnn_landmark_wlasl25_best.pt`
-- optionally `HF_MODEL_FILENAME=sign_transformer_best.pt` if you want to demo
-  the Transformer checkpoint instead
+For the sentence-level How2Sign demo:
 
-For the How2Sign sentence tab, set:
+- `HF_SENTENCE_MODEL_REPO` should point to a model repo containing `cnn-3d-sentence-top25-normalized.keras`
+- optionally set `HF_SENTENCE_MODEL_FILENAME` if you publish the sentence model under a different name
 
-- `HF_SENTENCE_MODEL_REPO` to a HF model repo containing
-  `cnn-3d-sentence-top25-normalized.keras`
-- optionally `HF_SENTENCE_MODEL_FILENAME` if you publish the sentence model
-  under a different filename
+If model artifacts already live under `models/` in the Space repo, the app can load them locally without additional Hugging Face Hub variables.
 
-If you keep the model artifacts directly in the Space repo under `models/`,
-the app will load them locally without any HF Hub environment variables.
+## Training notes
 
-## Method
+### Word-level landmark branch
 
-```
-webcam frame (30 FPS)
-  -> MediaPipe Holistic -> 225-d landmark vector
-  -> rolling buffer of 32 frames (~1 second)
-  -> temporal 1D CNN over the landmark sequence
-  -> top-1 sign + confidence
-  -> stability filter (2 consecutive agreeing predictions, confidence >= 0.35)
-  -> live caption + optional TTS
-```
+The older webcam branch uses:
 
-The optional Transformer checkpoint uses the same landmark tensors with a
-CLS-token attention encoder and is kept as an extra attention experiment.
+- MediaPipe Holistic landmark extraction
+- a rolling 32-frame sequence
+- a temporal 1D CNN over landmark vectors
 
-## Dataset
+This branch is useful for the live demo, but it is **not** the final sentence-classification pipeline.
 
-[WLASL-100](https://dxli94.github.io/WLASL/) — the 100 most frequent glosses
-from the Word-Level American Sign Language video dataset (Li et al., WACV 2020).
-Licensed under the Computational Use of Data Agreement (C-UDA).
+### Sentence-level 3D CNN branch
 
-## Training
-
-The training notebook is at `notebooks/train_wlasl100_colab.ipynb`. It runs on
-Google Colab (free T4 GPU), trains the required landmark CNN, optionally trains
-the Transformer extension, and saves all outputs to Google Drive.
-
-## Hybrid VLM Evaluation
-
-After the notebook creates
-`vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl`, copy that folder into the
-repo or point the script at the downloaded file:
+The main sentence training entrypoint is:
 
 ```bash
-python scripts/evaluate_hybrid_vlm.py ^
-  --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl ^
-  --output-dir results/vlm_eval
+python -m bridgelink_asl.cli.train_cnn_model ^
+  --clips data\processed\how2sign_sentences_top25_normalized.frames.jsonl ^
+  --output models\cnn-3d-sentence-top25-normalized.keras ^
+  --batch-size 2 ^
+  --frame-count 16 ^
+  --image-size 112
 ```
 
-This writes a baseline metrics file plus `vlm_review_template.csv`. Fill the
-`vlm_prediction` column using a VLM that chooses from the CNN's top-5
-candidate labels only, then rescore:
+This branch trains directly on **How2Sign sentence videos** and is the model that should be cited when describing the repo's final sentence classifier.
 
-```bash
-python scripts/evaluate_hybrid_vlm.py ^
-  --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl ^
-  --predictions results/vlm_eval/vlm_review_template.csv ^
-  --output-dir results/vlm_eval
-```
+## Repo layout
 
-Report the three comparison numbers: CNN top-1 accuracy, CNN top-5 coverage,
-and VLM-reranked top-5 accuracy. The Transformer result is kept as an optional
-attention/extra-credit experiment.
-
-## Imported How2Sign VLM Workspace
-
-The teammate Qwen2.5-VL fine-tuning workspace is now included directly in this
-repo under `vlm_hf_space/`.
-
-That folder preserves:
-
-- QLoRA training scripts
-- How2Sign/ASL Citizen prep scripts
-- experiment configs
-- archived baseline vs fine-tuned metrics
-- sample prediction outputs from the Hugging Face Space repo
-
-The original source repo was:
-`https://huggingface.co/spaces/ofraij123/ASL-Video-To-Sentence-Translation`
-
-## Wrapper Scaffold
-
-The repo also includes a sentence-wrapper CLI for phase-3 style comparisons
-over clip manifests:
-
-```bash
-run_wrapper --mode compare --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
-```
-
-The mock interpreter still works offline for testing, and the local Qwen path
-now loads lazily when the optional VLM extras are installed:
-
-```bash
-pip install -e ".[vlm]"
-run_wrapper --mode compare --vlm-provider local --manifest data/vlm_eval_wlasl25_cnn/wlasl25_cnn_hybrid_eval.jsonl
-```
-
-The wrapper accepts both the older `clip_id`/`gloss` sentence manifests and the
-current hybrid WLASL eval manifests with `video_id`, `true_label`, and
-`cnn_top5`.
-
-## Repo Layout
-
-```
-app.py                          Gradio Space entrypoint
+```text
+app.py                          Gradio and Hugging Face Space entrypoint
 requirements.txt                Space / local dependencies
 src/bridgelink_asl/
-  inference.py                  CNN/Transformer loader + MediaPipe extraction runtime
-  sentence_inference.py         How2Sign sentence CNN loader + clip preprocessing
-  wrapper.py                    Sentence wrapper scaffold for cnn/vlm/compare runs
-  (other modules)               Supporting pipeline code
+  inference.py                  Word-level landmark inference runtime
+  sentence_inference.py         How2Sign sentence 3D CNN inference runtime
+  wrapper.py                    CNN / VLM comparison wrapper utilities
 models/
-  cnn_landmark_best.pt          Primary CNN weights (download from Drive after training)
-  cnn_landmark_wlasl25_best.pt  Smaller live-demo CNN weights
-  cnn-3d-sentence-top25-normalized.keras   Best How2Sign repeated-sentence 3D CNN weights
+  cnn_landmark_best.pt          Word-level landmark CNN weights
+  cnn_landmark_wlasl25_best.pt  Smaller word-level live-demo weights
+  cnn-3d-sentence-top25-normalized.keras
+                                Final How2Sign sentence 3D CNN weights
   cnn-3d-sentence-top25-normalized.labels.json
-  sign_transformer_best.pt      Optional Transformer weights
-  labels.json                   Label map
+                                Sentence label map
+  sign_transformer_best.pt      Optional word-level attention experiment
 results/
-  metrics.json                  Test accuracy, top-5, etc.
-  *.png                         Plots for the report
+  *.json                        Metrics and dataset summaries
+  *.png                         Plots for the report and presentation
 notebooks/
-  train_wlasl100_colab.ipynb    End-to-end training notebook
+  train_wlasl100_colab.ipynb    Word-level landmark training notebook
 report/
-  main.tex                      CVPR-style project report
-  references.bib                Bibliography
+  main.tex                      Final report source
+  BridgeLink_ASL_Final_Report.pdf
+                                Final compiled report
 vlm_hf_space/                   Imported Qwen2.5-VL workspace from Hugging Face Space
-docs/                           Architecture notes, phase plans, literature review
+docs/                           Setup notes, architecture notes, and planning docs
 tests/                          Unit tests
 ```
 
+## Final project focus
+
+To avoid confusion:
+
+- **Word-level recognition** in this repo is the landmark CNN branch.
+- **Full-sentence classification** in this repo is the **How2Sign 3D CNN** branch.
+- **Open-ended sentence translation experiments** in this repo are in the imported **VLM workspace**.
+
+If you need the final sentence model for the class project discussion, use the How2Sign 3D CNN path and not the older WLASL landmark branch.
+
 ## Team
 
-| Name | Role | Email |
-|---|---|---|
-| Dalen Gordon | Undergraduate | dgordo34@charlotte.edu |
-| Ervin Gordon III | Undergraduate | egordo17@charlotte.edu |
-| Frank Garcia | Graduate | fgarci11@charlotte.edu |
-| Omar Fraij | Undergraduate | ofraij@charlotte.edu |
+| Name | Role |
+|---|---|
+| Dalen Gordon | Undergraduate |
+| Ervin Gordon III | Undergraduate |
+| Frank Garcia | Graduate |
+| Omar Fraij | Undergraduate |
 
-ITCS 4152/5010 — Introduction to Computer Vision, Spring 2026
+ITCS 4152/5010 - Introduction to Computer Vision, Spring 2026  
 University of North Carolina at Charlotte
