@@ -78,6 +78,7 @@ WLASL-based data are kept only for the **word-level webcam / isolated-sign branc
 ## VLM workspace
 
 The teammate Qwen2.5-VL fine-tuning workspace is included directly in this repo under `vlm_hf_space/`.
+An additional organized copy is also present under `VLM/ASL-Video-To-Sentence-Translation/` on the current main branch.
 
 That folder preserves:
 
@@ -175,6 +176,8 @@ report/
   BridgeLink_ASL_Final_Report.pdf
                                 Final compiled report
 vlm_hf_space/                   Imported Qwen2.5-VL workspace from Hugging Face Space
+VLM/ASL-Video-To-Sentence-Translation/
+                                Organized VLM workspace copy added on GitHub main
 docs/                           Setup notes, architecture notes, and planning docs
 tests/                          Unit tests
 ```
